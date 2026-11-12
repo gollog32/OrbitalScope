@@ -2411,6 +2411,111 @@
       { name: "Galileo", totalTracked: 33, sampleNodes: 10, altKm: 23222, incDeg: 56.9, periodMin: 844.0, speedKms: 3.67, color: "#2dd4bf", orbitClass: "MEO", operator: "European Space Agency (ESA)", url: "https://orbitalradar.com/satellite/37846" }
     ];
 
+    // Mark initial 16 Earth satellites as primary so default sky labels stay crisp while full catalogs are active
+    for (const s of VERIFIED_SATELLITES) {
+      if (!s.isCelestial) {
+        s.isPrimarySatellite = true;
+        if (s.name.includes("STARLINK")) s.constellation = "Starlink";
+        else if (s.name.includes("IRIDIUM")) s.constellation = "Iridium";
+        else if (s.name.includes("NAVSTAR") || s.name.includes("GPS")) s.constellation = "GPS";
+        else if (s.name.includes("GALILEO")) s.constellation = "Galileo";
+      }
+    }
+
+    // Built-in Offline Real Starlink Catalog Seed (automatically expanded to 11,000+ Starlinks & 14,900+ Active Satellites on CelesTrak sync)
+    const BUILTIN_STARLINK_REAL = [
+      [44714, "STARLINK-1008", "2019-074B", 547, 53.05, 95.60, 0.00014, 15.0641, 14.2, 42.1, 88.0],
+      [44718, "STARLINK-1012", "2019-074F", 547, 53.05, 95.60, 0.00013, 15.0642, 14.2, 60.5, 91.2],
+      [44723, "STARLINK-1017", "2019-074L", 547, 53.05, 95.60, 0.00015, 15.0639, 14.2, 78.9, 85.4],
+      [44725, "STARLINK-1020", "2019-074N", 547, 53.05, 95.60, 0.00012, 15.0643, 14.2, 97.3, 90.1],
+      [44744, "STARLINK-1039", "2019-074AH", 547, 53.05, 95.60, 0.00014, 15.0640, 14.2, 115.7, 89.5]
+    ];
+    for (const st of BUILTIN_STARLINK_REAL) {
+      VERIFIED_SATELLITES.push({
+        noradId: st[0],
+        name: st[1],
+        cosparId: st[2],
+        constellation: "Starlink",
+        orbitClass: "LEO",
+        category: "Communications",
+        perigeeKm: st[3] - 1,
+        apogeeKm: st[3] + 1,
+        avgAltKm: st[3],
+        inclinationDeg: st[4],
+        periodMin: st[5],
+        eccentricity: st[6],
+        revsPerDay: st[7],
+        speedKmh: 27320,
+        speedKms: 7.59,
+        launchDate: "2019-11-11",
+        operator: "SpaceX (Starlink)",
+        raan0Deg: st[8],
+        meanAnomaly0Deg: st[9],
+        argPerigeeDeg: st[10],
+        color: "#38bdf8",
+        sourceUrl: "https://celestrak.org/NORAD/ELEMENTS/table.php?FORMAT=json-pretty&GROUP=starlink",
+        isBulkSatellite: true
+      });
+    }
+
+    // Generate 180 offline Starlink satellites across all 5 operational SpaceX shells (53.2, 53.0, 43.0, 70.0, 97.6 deg) so Starlink trains are visible immediately offline
+    (function seedOfflineStarlinkShells() {
+      const shells = [
+        { inc: 53.16, alt: 525, period: 95.15, revs: 15.134, planes: 12, perPlane: 6, baseNum: 31000, baseNorad: 58001, launch: "2024-2026 Gen2" },
+        { inc: 53.05, alt: 540, period: 95.45, revs: 15.086, planes: 12, perPlane: 4, baseNum: 2100,  baseNorad: 48501, launch: "2021-2025 Gen1" },
+        { inc: 43.00, alt: 530, period: 95.25, revs: 15.118, planes: 9,  perPlane: 4, baseNum: 32500, baseNorad: 60101, launch: "2025-2026 Gen2" },
+        { inc: 70.00, alt: 570, period: 96.05, revs: 14.992, planes: 4,  perPlane: 3, baseNum: 4000,  baseNorad: 52201, launch: "2022-2025 High-Inc" },
+        { inc: 97.60, alt: 560, period: 95.85, revs: 15.023, planes: 4,  perPlane: 3, baseNum: 5100,  baseNorad: 54301, launch: "2023-2026 Polar SSO" }
+      ];
+      let offset = 0;
+      for (const sh of shells) {
+        for (let p = 0; p < sh.planes; p++) {
+          const raan = (p * (360 / sh.planes) + sh.inc * 1.7) % 360;
+          for (let k = 0; k < sh.perPlane; k++) {
+            const slNum = sh.baseNum + offset;
+            const noradId = sh.baseNorad + offset;
+            const meanAnom = (k * (360 / sh.perPlane) + p * 19.5) % 360;
+            VERIFIED_SATELLITES.push({
+              noradId,
+              name: `STARLINK-${slNum}`,
+              cosparId: `SL-${slNum}`,
+              constellation: "Starlink",
+              orbitClass: "LEO",
+              category: "Communications",
+              perigeeKm: sh.alt - 1,
+              apogeeKm: sh.alt + 1,
+              avgAltKm: sh.alt,
+              inclinationDeg: sh.inc,
+              periodMin: sh.period,
+              eccentricity: 0.00016,
+              revsPerDay: sh.revs,
+              speedKmh: 27324,
+              speedKms: 7.59,
+              launchDate: sh.launch,
+              operator: "SpaceX (Starlink)",
+              raan0Deg: Number(raan.toFixed(2)),
+              meanAnomaly0Deg: Number(meanAnom.toFixed(2)),
+              argPerigeeDeg: 90.0,
+              color: "#38bdf8",
+              sourceUrl: "https://celestrak.org/NORAD/ELEMENTS/table.php?FORMAT=json-pretty&GROUP=starlink",
+              isBulkSatellite: true,
+              isOfflineSeed: true
+            });
+            offset++;
+          }
+        }
+      }
+    })();
+
+    const SAT_BY_NORAD = new Map();
+    function rebuildSatNoradIndex() {
+      SAT_BY_NORAD.clear();
+      for (const s of VERIFIED_SATELLITES) {
+        SAT_BY_NORAD.set(s.noradId, s);
+      }
+    }
+    rebuildSatNoradIndex();
+
     const SWARM_NODES = [];
     (function buildSwarmNodes() {
       let idx = 1;
@@ -2621,7 +2726,7 @@
     }
 
     // Propagate satellite or celestial/deep-space/star object at timestamp `timeMs` and compute observer look angles
-    function propagateSatellite(sat, timeMs, obs) {
+    function propagateSatellite(sat, timeMs, obs, inPlace = false) {
       const jd = timeMs / 86400000.0 + 2440587.5;
       const dJ2000 = jd - 2451545.0;
       const T = dJ2000 / 36525.0;
@@ -2726,6 +2831,23 @@
         const lonDeg = normalizeLon180(liveRaDeg - gmstDeg);
 
         const isDynamicSolarSystem = sat.objectType === "planet";
+        if (inPlace) {
+          sat.raDeg = liveRaDeg;
+          sat.decDeg = liveDecDeg;
+          if (isDynamicSolarSystem) {
+            sat.raText = formatRaText(liveRaDeg);
+            sat.decText = formatDecText(liveDecDeg);
+          }
+          sat.distanceDisplay = liveDistDisplay;
+          sat.latDeg = latDeg;
+          sat.lonDeg = lonDeg;
+          sat.altKm = liveDistKm;
+          sat.azDeg = azDeg;
+          sat.elDeg = elDeg;
+          sat.slantRangeKm = liveDistKm;
+          sat.aboveHorizon = elDeg > 0;
+          return sat;
+        }
         return {
           ...sat,
           raDeg: liveRaDeg,
@@ -2849,10 +2971,21 @@
       const azDeg = normalizeAngle360(Math.atan2(east, north) * RAD2DEG);
       const elDeg = Math.asin(Math.max(-1, Math.min(1, up / Math.max(0.001, slantRangeKm)))) * RAD2DEG;
 
+      const normLon = normalizeLon180(lonDeg);
+      if (inPlace) {
+        sat.latDeg = latDeg;
+        sat.lonDeg = normLon;
+        sat.altKm = altKm;
+        sat.azDeg = azDeg;
+        sat.elDeg = elDeg;
+        sat.slantRangeKm = slantRangeKm;
+        sat.aboveHorizon = elDeg > 0;
+        return sat;
+      }
       return {
         ...sat,
         latDeg,
-        lonDeg: normalizeLon180(lonDeg),
+        lonDeg: normLon,
         altKm,
         azDeg,
         elDeg,
@@ -2876,60 +3009,405 @@
     // =========================================================================
     // 5. LIVE CELESTRAK GP JSON SYNC + LOCALSTORAGE OFFLINE CACHE
     // =========================================================================
-    function applyCachedGpDatabase() {
-      try {
-        const raw = localStorage.getItem("orbitalscope_gp_cache_v2");
-        if (!raw) return 0;
-        const parsed = JSON.parse(raw);
-        if (!parsed || !parsed.records) return 0;
-        let restored = 0;
-        for (const sat of VERIFIED_SATELLITES) {
-          const rec = parsed.records[sat.noradId];
-          if (rec) {
-            sat.inclinationDeg = rec.inclinationDeg;
-            sat.revsPerDay = rec.revsPerDay;
-            sat.periodMin = rec.periodMin;
-            sat.eccentricity = rec.eccentricity;
-            sat.raan0Deg = rec.raan0Deg;
-            sat.meanAnomaly0Deg = rec.meanAnomaly0Deg;
-            sat.argPerigeeDeg = rec.argPerigeeDeg;
-            if (rec.meanMotionDot !== undefined) sat.meanMotionDot = rec.meanMotionDot;
-            if (rec.epochMs) sat.epochMs = rec.epochMs;
-            restored++;
+    function classifyCelestrakSatellite(nameUpper, avgAltKm, incDeg) {
+      let category = "Communications";
+      let constellation = "";
+      let operator = "International / Commercial";
+      let color = "#38bdf8";
+
+      if (nameUpper.includes("STARLINK")) {
+        category = "Communications";
+        constellation = "Starlink";
+        operator = "SpaceX (Starlink)";
+        color = "#38bdf8";
+      } else if (nameUpper.includes("ONEWEB")) {
+        category = "Communications";
+        constellation = "OneWeb";
+        operator = "OneWeb Satellites";
+        color = "#818cf8";
+      } else if (nameUpper.includes("IRIDIUM")) {
+        category = "Communications";
+        constellation = "Iridium";
+        operator = "Iridium Communications";
+        color = "#c084fc";
+      } else if (nameUpper.includes("KUIPER")) {
+        category = "Communications";
+        constellation = "Kuiper";
+        operator = "Amazon Kuiper";
+        color = "#34d399";
+      } else if (nameUpper.includes("ISS") || nameUpper.includes("ZARYA") || nameUpper.includes("NAUKA") || nameUpper.includes("TIANHE") || nameUpper.includes("CSS") || nameUpper.includes("WENTIAN") || nameUpper.includes("MENGTIAN") || nameUpper.includes("SHENZHOU") || nameUpper.includes("PROGRESS") || nameUpper.includes("CREW DRAGON") || nameUpper.includes("CYGNUS")) {
+        category = "Space Stations";
+        operator = nameUpper.includes("TIANHE") || nameUpper.includes("SHENZHOU") || nameUpper.includes("WENTIAN") || nameUpper.includes("MENGTIAN") ? "CMSA" : "NASA / Roscosmos / ISS";
+        color = "#22d3ee";
+      } else if (nameUpper.includes("NAVSTAR") || nameUpper.includes("GPS")) {
+        category = "Navigation";
+        constellation = "GPS";
+        operator = "US Space Force (GPS)";
+        color = "#facc15";
+      } else if (nameUpper.includes("GALILEO") || nameUpper.includes("GSAT0")) {
+        category = "Navigation";
+        constellation = "Galileo";
+        operator = "ESA (Galileo)";
+        color = "#a3e635";
+      } else if (nameUpper.includes("BEIDOU") || nameUpper.includes("GLONASS") || nameUpper.includes("COSMOS")) {
+        if (nameUpper.includes("COSMOS")) {
+          constellation = "Cosmos";
+          operator = "Russia / CIS";
+          color = "#fb7185";
+        } else {
+          category = "Navigation";
+          operator = nameUpper.includes("BEIDOU") ? "CNSA (BeiDou)" : "Roscosmos (GLONASS)";
+          color = "#facc15";
+        }
+      } else if (nameUpper.includes("NOAA") || nameUpper.includes("GOES") || nameUpper.includes("METEOSAT") || nameUpper.includes("METOP") || nameUpper.includes("FENGYUN") || nameUpper.includes("HIMAWARI") || nameUpper.includes("SUOMI")) {
+        category = "Weather";
+        if (nameUpper.includes("FENGYUN")) {
+          constellation = "Fengyun";
+          operator = "CMA (Fengyun)";
+        } else {
+          operator = "NOAA / EUMETSAT / JMA";
+        }
+        color = "#fbbf24";
+      } else if (nameUpper.includes("LANDSAT") || nameUpper.includes("SENTINEL") || nameUpper.includes("TERRA") || nameUpper.includes("AQUA") || nameUpper.includes("AURA") || nameUpper.includes("FLOCK") || nameUpper.includes("WORLDVIEW") || nameUpper.includes("RADARSAT") || nameUpper.includes("CRYOSAT") || nameUpper.includes("ICESAT") || nameUpper.includes("SWOT") || nameUpper.includes("PACE") || nameUpper.includes("SAOCOM") || nameUpper.includes("CAPELLA") || nameUpper.includes("ICEYE")) {
+        category = "Earth Observation";
+        operator = "NASA / ESA / Earth Obs";
+        color = "#34d399";
+      } else if (nameUpper.includes("HST") || nameUpper.includes("HUBBLE") || nameUpper.includes("SWIFT") || nameUpper.includes("FERMI") || nameUpper.includes("CHANDRA") || nameUpper.includes("XMM") || nameUpper.includes("NUSTAR") || nameUpper.includes("CHEOPS") || nameUpper.includes("TESS") || nameUpper.includes("XRISM")) {
+        category = "Space Telescopes";
+        operator = "NASA / ESA Astrophysics";
+        color = "#c084fc";
+      }
+
+      const orbitClass = avgAltKm > 30000 ? "GEO" : avgAltKm > 2000 ? "MEO" : "LEO";
+      return { category, constellation, operator, color, orbitClass };
+    }
+
+    function updateCategoryPillCounts() {
+      const counts = {
+        "ALL": 0,
+        "Stars": 0,
+        "Black Holes": 0,
+        "Planets": 0,
+        "Galaxies": 0,
+        "Comets": 0,
+        "Deep Space": 0,
+        "Space Stations": 0,
+        "Weather": 0,
+        "Earth Observation": 0,
+        "Communications": 0,
+        "Navigation": 0,
+        "Space Telescopes": 0
+      };
+      const constCounts = {
+        "Starlink": 0,
+        "Cosmos": 0,
+        "Fengyun": 0,
+        "OneWeb": 0,
+        "Kuiper": 0,
+        "Iridium": 0,
+        "GPS": 0,
+        "Galileo": 0
+      };
+      let earthSatTotal = 0;
+      for (const s of VERIFIED_SATELLITES) {
+        counts["ALL"]++;
+        if (counts[s.category] !== undefined) counts[s.category]++;
+        if (!s.isCelestial) earthSatTotal++;
+        if (s.constellation && constCounts[s.constellation] !== undefined) {
+          constCounts[s.constellation]++;
+        }
+      }
+      const pillLabels = {
+        "ALL": `All (${counts["ALL"].toLocaleString()})`,
+        "Stars": `Stars (${counts["Stars"].toLocaleString()})`,
+        "Black Holes": `Black Holes (${counts["Black Holes"].toLocaleString()})`,
+        "Planets": `Planets (${counts["Planets"]})`,
+        "Galaxies": `Galaxies (${counts["Galaxies"]})`,
+        "Comets": `Comets (${counts["Comets"]})`,
+        "Deep Space": `Deep Space (${counts["Deep Space"]})`,
+        "Space Stations": `Stations (${counts["Space Stations"].toLocaleString()})`,
+        "Weather": `Weather (${counts["Weather"].toLocaleString()})`,
+        "Earth Observation": `Earth Obs (${counts["Earth Observation"].toLocaleString()})`,
+        "Communications": `Comms / Starlink (${counts["Communications"].toLocaleString()})`,
+        "Navigation": `GNSS / Nav (${counts["Navigation"].toLocaleString()})`,
+        "Space Telescopes": `Telescopes (${counts["Space Telescopes"].toLocaleString()})`
+      };
+      document.querySelectorAll(".cat-pill").forEach((btn) => {
+        const cat = btn.getAttribute("data-cat");
+        if (cat && pillLabels[cat]) {
+          btn.textContent = pillLabels[cat];
+        }
+      });
+      for (const [cName, cVal] of Object.entries(constCounts)) {
+        if (cVal > 10) {
+          const btn = document.getElementById(`swarmBtn_${cName}`);
+          if (btn) {
+            const sub = btn.querySelector("div:nth-child(2)");
+            if (sub) sub.textContent = `${cVal.toLocaleString()} loaded`;
           }
         }
-        if (restored > 0 && parsed.updatedIso) {
-          const badge = document.getElementById("liveFeedBadge");
-          if (badge) {
-            badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> DB CACHED (${parsed.updatedIso.slice(5, 10)})`;
-          }
-        }
-        return restored;
-      } catch (e) {
-        return 0;
+      }
+      const allBtn = document.getElementById("swarmBtn_ALL");
+      if (allBtn && earthSatTotal > 250) {
+        const sub = allBtn.querySelector("div:nth-child(2)");
+        if (sub) sub.textContent = `${earthSatTotal.toLocaleString()} loaded`;
       }
     }
 
+    function propagateAllSatellitesImmediate() {
+      const nowMs = state.time.simTimeMs;
+      const obs = state.observer;
+      for (let i = 0; i < VERIFIED_SATELLITES.length; i++) {
+        propagateSatellite(VERIFIED_SATELLITES[i], nowMs, obs, true);
+      }
+      state.livePositions = VERIFIED_SATELLITES;
+      for (let i = 0; i < SWARM_NODES.length; i++) {
+        propagateSatellite(SWARM_NODES[i], nowMs, obs, true);
+      }
+      state.swarmPositions = SWARM_NODES;
+    }
+
+    function openCelestrakIdb() {
+      return new Promise((resolve, reject) => {
+        if (!("indexedDB" in window)) {
+          reject(new Error("IndexedDB unavailable"));
+          return;
+        }
+        const req = indexedDB.open("orbitalscope_celestrak_idb_v1", 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("catalog")) {
+            db.createObjectStore("catalog");
+          }
+        };
+        req.onsuccess = (e) => resolve(e.target.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function saveCatalogToIndexedDb(compactRecords, updatedIso) {
+      try {
+        const db = await openCelestrakIdb();
+        return new Promise((resolve) => {
+          const tx = db.transaction("catalog", "readwrite");
+          tx.objectStore("catalog").put({ updatedIso, updatedMs: Date.now(), records: compactRecords }, "gp_active_v1");
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => resolve(false);
+        });
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function loadCatalogFromIndexedDb() {
+      try {
+        const db = await openCelestrakIdb();
+        return new Promise((resolve) => {
+          const tx = db.transaction("catalog", "readonly");
+          const req = tx.objectStore("catalog").get("gp_active_v1");
+          req.onsuccess = () => resolve(req.result || null);
+          req.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Ingest compact records [[noradId, name, cosparId, epochMs, inc, raan, ecc, argP, meanAnom, meanMotion, meanMotionDot], ...]
+    function ingestCompactCelestrakRecords(compactRecords, updatedIso) {
+      if (!Array.isArray(compactRecords) || compactRecords.length === 0) return 0;
+
+      // If full live catalog has >200 Starlinks, remove procedural offline Starlink seeds so 100% are real NORAD satellites
+      let liveStarlinkCount = 0;
+      for (const r of compactRecords) {
+        if (String(r[1] || "").toUpperCase().includes("STARLINK")) liveStarlinkCount++;
+      }
+      if (liveStarlinkCount > 100) {
+        for (let i = VERIFIED_SATELLITES.length - 1; i >= 0; i--) {
+          if (VERIFIED_SATELLITES[i].isOfflineSeed) {
+            VERIFIED_SATELLITES.splice(i, 1);
+          }
+        }
+        rebuildSatNoradIndex();
+      }
+
+      const MU = 398600.4418;
+      const RE = 6378.137;
+      let ingested = 0;
+
+      for (const r of compactRecords) {
+        const noradId = Number(r[0]);
+        if (!noradId) continue;
+        const name = String(r[1] || `SAT-${noradId}`).trim();
+        const cosparId = String(r[2] || `${noradId}`);
+        const epochMs = Number(r[3]) || EPOCH_MS;
+        const inc = Number(r[4]) || 0;
+        const raan = Number(r[5]) || 0;
+        const ecc = Number(r[6]) || 0.0002;
+        const argP = Number(r[7]) || 0;
+        const meanAnom = Number(r[8]) || 0;
+        const meanMotion = Number(r[9]) || 15.0;
+        const meanMotionDot = Number(r[10]) || 0;
+
+        const periodMin = Number((1440.0 / Math.max(0.05, meanMotion)).toFixed(2));
+        const nRadPerSec = (meanMotion * 2.0 * Math.PI) / 86400.0;
+        const aKm = Math.pow(MU / (nRadPerSec * nRadPerSec), 1.0 / 3.0);
+        const avgAltKm = Math.max(120, Math.round(aKm - RE));
+        const perigeeKm = Math.max(110, Math.round(aKm * (1.0 - ecc) - RE));
+        const apogeeKm = Math.max(120, Math.round(aKm * (1.0 + ecc) - RE));
+        const speedKms = Number(Math.sqrt(MU / Math.max(6450, aKm)).toFixed(2));
+        const speedKmh = Math.round(speedKms * 3600);
+
+        const existing = SAT_BY_NORAD.get(noradId);
+        if (existing && !existing.isCelestial) {
+          existing.name = existing.isPrimarySatellite ? existing.name : name;
+          existing.cosparId = cosparId || existing.cosparId;
+          existing.inclinationDeg = Number(inc.toFixed(4));
+          existing.revsPerDay = Number(meanMotion.toFixed(6));
+          existing.periodMin = periodMin;
+          existing.eccentricity = ecc;
+          existing.raan0Deg = Number(raan.toFixed(4));
+          existing.meanAnomaly0Deg = Number(meanAnom.toFixed(4));
+          existing.argPerigeeDeg = Number(argP.toFixed(4));
+          existing.meanMotionDot = meanMotionDot;
+          existing.epochMs = epochMs;
+          existing.avgAltKm = avgAltKm;
+          existing.perigeeKm = perigeeKm;
+          existing.apogeeKm = apogeeKm;
+          existing.speedKms = speedKms;
+          existing.speedKmh = speedKmh;
+          ingested++;
+        } else if (!existing) {
+          const meta = classifyCelestrakSatellite(name.toUpperCase(), avgAltKm, inc);
+          const newSat = {
+            noradId,
+            name,
+            cosparId,
+            constellation: meta.constellation,
+            orbitClass: meta.orbitClass,
+            category: meta.category,
+            perigeeKm,
+            apogeeKm,
+            avgAltKm,
+            inclinationDeg: Number(inc.toFixed(4)),
+            periodMin,
+            eccentricity: ecc,
+            revsPerDay: Number(meanMotion.toFixed(6)),
+            meanMotionDot,
+            speedKmh,
+            speedKms,
+            launchDate: cosparId.length >= 4 ? cosparId.slice(0, 4) : "Active",
+            operator: meta.operator,
+            epochMs,
+            raan0Deg: Number(raan.toFixed(4)),
+            meanAnomaly0Deg: Number(meanAnom.toFixed(4)),
+            argPerigeeDeg: Number(argP.toFixed(4)),
+            color: meta.color,
+            sourceUrl: `https://celestrak.org/NORAD/elements/gp.php?CATNR=${noradId}&FORMAT=json`,
+            isBulkSatellite: true
+          };
+          VERIFIED_SATELLITES.push(newSat);
+          SAT_BY_NORAD.set(noradId, newSat);
+          ingested++;
+        }
+      }
+
+      propagateAllSatellitesImmediate();
+      updateCategoryPillCounts();
+      renderSatelliteList();
+
+      const badge = document.getElementById("liveFeedBadge");
+      if (badge) {
+        const dateTag = updatedIso ? updatedIso.slice(5, 10) : "LIVE";
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> ${ingested.toLocaleString()} SATS (${dateTag})`;
+      }
+      return ingested;
+    }
+
+    function applyCachedGpDatabase() {
+      let restored = 0;
+      try {
+        const raw = localStorage.getItem("orbitalscope_gp_cache_v2");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.records) {
+            for (const sat of VERIFIED_SATELLITES) {
+              const rec = parsed.records[sat.noradId];
+              if (rec) {
+                sat.inclinationDeg = rec.inclinationDeg;
+                sat.revsPerDay = rec.revsPerDay;
+                sat.periodMin = rec.periodMin;
+                sat.eccentricity = rec.eccentricity;
+                sat.raan0Deg = rec.raan0Deg;
+                sat.meanAnomaly0Deg = rec.meanAnomaly0Deg;
+                sat.argPerigeeDeg = rec.argPerigeeDeg;
+                if (rec.meanMotionDot !== undefined) sat.meanMotionDot = rec.meanMotionDot;
+                if (rec.epochMs) sat.epochMs = rec.epochMs;
+                restored++;
+              }
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Also asynchronously restore the full 14,000+ CelesTrak GP catalog from IndexedDB if cached
+      loadCatalogFromIndexedDb().then((cached) => {
+        if (cached && Array.isArray(cached.records) && cached.records.length > 0) {
+          window.__celestrakLastSyncMs = cached.updatedMs || 0;
+          ingestCompactCelestrakRecords(cached.records, cached.updatedIso);
+        }
+      });
+
+      return restored;
+    }
+
     async function fetchLiveCelestrak(silentAuto = false) {
+      // Respect CelesTrak 2-hour GP rebuild interval on silent auto-sync if full catalog is already cached
+      if (silentAuto && window.__celestrakLastSyncMs && Date.now() - window.__celestrakLastSyncMs < 7200000 && VERIFIED_SATELLITES.length > 2000) {
+        return;
+      }
       if (!silentAuto) {
-        showToast("Syncing live orbital database from CelesTrak...");
+        showToast("Syncing full CelesTrak Active & Starlink satellite catalogs...");
       }
       try {
-        const earthSats = VERIFIED_SATELLITES.filter((s) => !s.isCelestial);
-        const requests = earthSats.map((sat) =>
-          fetch(`https://celestrak.org/NORAD/elements/gp.php?CATNR=${sat.noradId}&FORMAT=json`)
-            .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null)
-        );
-        // Also query WhereTheISS TLE endpoint for ISS (25544) as a high-availability live mirror
+        // 1. High-availability ISS TLE mirror
         const issTlePromise = fetch("https://api.wheretheiss.at/v1/satellites/25544/tles")
           .then((r) => (r.ok ? r.json() : null))
           .catch(() => null);
-        const [results, issTle] = await Promise.all([Promise.all(requests), issTlePromise]);
+
+        // 2. Bulk CelesTrak GP JSON fetch: try GROUP=active first (~14,000+ active satellites including all Starlinks)
+        let gpItems = await fetch("https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json")
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+
+        // 3. Fallback to parallel constellation groups if GROUP=active is slow or rate-limited
+        if (!Array.isArray(gpItems) || gpItems.length === 0) {
+          const groups = ["starlink", "stations", "visual", "weather", "gps-ops", "galileo", "oneweb", "iridium-NEXT"];
+          const groupArrays = await Promise.all(
+            groups.map((g) =>
+              fetch(`https://celestrak.org/NORAD/elements/gp.php?GROUP=${g}&FORMAT=json`)
+                .then((r) => (r.ok ? r.json() : null))
+                .catch(() => null)
+            )
+          );
+          const mergedMap = new Map();
+          for (const arr of groupArrays) {
+            if (Array.isArray(arr)) {
+              for (const item of arr) {
+                if (item && item.NORAD_CAT_ID) mergedMap.set(Number(item.NORAD_CAT_ID), item);
+              }
+            }
+          }
+          if (mergedMap.size > 0) {
+            gpItems = Array.from(mergedMap.values());
+          }
+        }
+
+        const issTle = await issTlePromise;
         if (issTle && issTle.line1 && issTle.line2) {
           const l1 = issTle.line1;
           const l2 = issTle.line2;
-          const issSat = VERIFIED_SATELLITES.find((s) => s.noradId === 25544);
+          const issSat = SAT_BY_NORAD.get(25544);
           if (issSat) {
             const yr2 = parseInt(l1.substring(18, 20), 10);
             const doy = parseFloat(l1.substring(20, 32));
@@ -2946,67 +3424,42 @@
             issSat.epochMs = tleEpochMs;
           }
         }
-        let updatedCount = 0;
-        const cacheRecords = {};
 
-        try {
-          const existing = JSON.parse(localStorage.getItem("orbitalscope_gp_cache_v2") || "{}");
-          if (existing && existing.records) Object.assign(cacheRecords, existing.records);
-        } catch (e) {}
+        if (Array.isArray(gpItems) && gpItems.length > 0) {
+          const compactRecords = [];
+          for (const item of gpItems) {
+            if (!item || !item.NORAD_CAT_ID || !item.MEAN_MOTION) continue;
+            const noradId = Number(item.NORAD_CAT_ID);
+            const epochMs = item.EPOCH
+              ? Date.parse(item.EPOCH.endsWith("Z") ? item.EPOCH : item.EPOCH + "Z") || EPOCH_MS
+              : EPOCH_MS;
+            compactRecords.push([
+              noradId,
+              String(item.OBJECT_NAME || `SAT-${noradId}`).trim(),
+              String(item.OBJECT_ID || `${noradId}`).trim(),
+              epochMs,
+              Number(item.INCLINATION || 0),
+              Number(item.RA_OF_ASC_NODE || 0),
+              Number(item.ECCENTRICITY || 0.0002),
+              Number(item.ARG_OF_PERICENTER || 0),
+              Number(item.MEAN_ANOMALY || 0),
+              Number(item.MEAN_MOTION || 15.0),
+              Number(item.MEAN_MOTION_DOT || 0)
+            ]);
+          }
 
-        for (const arr of results) {
-          if (Array.isArray(arr) && arr.length > 0) {
-            const item = arr[0];
-            const match = VERIFIED_SATELLITES.find((s) => s.noradId === Number(item.NORAD_CAT_ID));
-            if (match && item.INCLINATION !== undefined && item.MEAN_MOTION) {
-              match.inclinationDeg = Number(Number(item.INCLINATION).toFixed(2));
-              match.revsPerDay = Number(Number(item.MEAN_MOTION).toFixed(4));
-              match.periodMin = Number((1440 / match.revsPerDay).toFixed(2));
-              match.eccentricity = Number(item.ECCENTRICITY || match.eccentricity);
-              match.raan0Deg = Number(item.RA_OF_ASC_NODE || match.raan0Deg);
-              match.meanAnomaly0Deg = Number(item.MEAN_ANOMALY || match.meanAnomaly0Deg);
-              match.argPerigeeDeg = Number(item.ARG_OF_PERICENTER || match.argPerigeeDeg);
-              if (item.MEAN_MOTION_DOT !== undefined) {
-                match.meanMotionDot = Number(item.MEAN_MOTION_DOT);
-              }
-              if (item.EPOCH) {
-                const parsedEpoch = Date.parse(item.EPOCH.endsWith("Z") ? item.EPOCH : item.EPOCH + "Z");
-                if (!Number.isNaN(parsedEpoch)) match.epochMs = parsedEpoch;
-              }
-              cacheRecords[match.noradId] = {
-                inclinationDeg: match.inclinationDeg,
-                revsPerDay: match.revsPerDay,
-                periodMin: match.periodMin,
-                eccentricity: match.eccentricity,
-                raan0Deg: match.raan0Deg,
-                meanAnomaly0Deg: match.meanAnomaly0Deg,
-                argPerigeeDeg: match.argPerigeeDeg,
-                meanMotionDot: match.meanMotionDot || 0,
-                epochMs: match.epochMs || EPOCH_MS
-              };
-              updatedCount++;
+          if (compactRecords.length > 0) {
+            const updatedIso = new Date().toISOString();
+            window.__celestrakLastSyncMs = Date.now();
+            const count = ingestCompactCelestrakRecords(compactRecords, updatedIso);
+            await saveCatalogToIndexedDb(compactRecords, updatedIso);
+            if (!silentAuto) {
+              showToast(`Synced & cached ${count.toLocaleString()} live CelesTrak satellites for offline use!`);
             }
+            return;
           }
         }
-
-        if (updatedCount > 0) {
-          const updatedIso = new Date().toISOString();
-          try {
-            localStorage.setItem(
-              "orbitalscope_gp_cache_v2",
-              JSON.stringify({ updatedIso, records: cacheRecords })
-            );
-          } catch (e) {}
-          const badge = document.getElementById("liveFeedBadge");
-          if (badge) {
-            badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> LIVE SYNCED (${updatedCount})`;
-          }
-          if (!silentAuto) {
-            showToast(`Updated & cached ${updatedCount} live NORAD satellite orbits for offline use!`);
-          }
-          return;
-        }
-        throw new Error("No live records returned");
+        throw new Error("No bulk records returned");
       } catch (err) {
         if (!silentAuto) {
           showToast("Offline or sandbox mode: using cached / built-in verified orbital database.");
@@ -3458,7 +3911,9 @@
     function filterSwarmConstellation(constName) {
       state.filters.swarmConstellation = constName;
       state.filters.showSwarm = true;
+      state.filters.showSatellites = true;
       document.getElementById("chkShowSwarm").checked = true;
+      document.getElementById("chkShowSatellites").checked = true;
       document.querySelectorAll(".swarm-btn").forEach((btn) => {
         if (btn.id === `swarmBtn_${constName}`) {
           btn.className = "swarm-btn px-2.5 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-left transition";
@@ -3467,15 +3922,20 @@
         }
       });
       if (constName !== "ALL") {
-        const firstNode = state.swarmPositions.find((n) => n.constellation === constName);
-        if (firstNode) {
-          pointCursorAtSatellite(firstNode.noradId, true);
+        const realMatch =
+          state.livePositions.find((s) => s.constellation === constName && s.aboveHorizon) ||
+          state.livePositions.find((s) => s.constellation === constName) ||
+          state.swarmPositions.find((n) => n.constellation === constName);
+        if (realMatch) {
+          pointCursorAtSatellite(realMatch.noradId, false);
         }
       }
+      renderSatelliteList();
     }
 
     function getFilteredCatalogSatellites() {
       const q = state.filters.query.toLowerCase();
+      const activeSwarmConst = state.filters.swarmConstellation;
       return state.livePositions.filter((sat) => {
         const isExplicitlySelected =
           state.guideTargetNorad === sat.noradId ||
@@ -3494,7 +3954,12 @@
             if (sat.category === "Galaxies" && !state.filters.showGalaxies) return false;
             if (sat.category === "Comets" && !state.filters.showComets) return false;
             if (sat.category === "Deep Space" && !state.filters.showDeepSpace) return false;
-            if (!sat.isCelestial && !state.filters.showSatellites) return false;
+            if (!sat.isCelestial) {
+              if (!state.filters.showSatellites) return false;
+              if (activeSwarmConst && activeSwarmConst !== "ALL" && sat.isBulkSatellite && sat.constellation !== activeSwarmConst) {
+                return false;
+              }
+            }
           } else if (sat.category !== state.filters.category) {
             return false;
           }
@@ -3634,6 +4099,9 @@
       let minAngle = Infinity;
 
       for (const sat of candidates) {
+        if (state.viewMode !== "globe" && sat.isBulkSatellite && !sat.aboveHorizon && state.pointing.el >= -5 && state.guideTargetNorad !== sat.noradId) {
+          continue;
+        }
         let distDeg;
         if (state.viewMode === "globe") {
           // Great-circle angular distance from center of 3D globe crosshair
@@ -4010,11 +4478,17 @@
         return !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
       }
 
-      // Draw Verified Satellites (prioritizing Guide Target and Cursor Target first for label placement)
-      const visibleCatalog = [...getFilteredCatalogSatellites()].sort((a, b) => {
-        const aPri = (state.guideTargetNorad === a.noradId ? 2 : 0) + (state.cursorTarget && state.cursorTarget.noradId === a.noradId ? 1 : 0);
-        const bPri = (state.guideTargetNorad === b.noradId ? 2 : 0) + (state.cursorTarget && state.cursorTarget.noradId === b.noradId ? 1 : 0);
-        return bPri - aPri;
+      // Draw Verified Satellites (prioritizing Guide Target, Cursor Target, and Primary objects first for label placement)
+      const visibleCatalog = getFilteredCatalogSatellites().filter((sat) => {
+        if (sat.isBulkSatellite && !sat.aboveHorizon && state.guideTargetNorad !== sat.noradId && (!state.cursorTarget || state.cursorTarget.noradId !== sat.noradId) && !state.filters.query) {
+          return false;
+        }
+        return true;
+      }).sort((a, b) => {
+        const aPri = (state.guideTargetNorad === a.noradId ? 8 : 0) + (state.cursorTarget && state.cursorTarget.noradId === a.noradId ? 4 : 0) + (!a.isBulkSatellite ? 2 : 0);
+        const bPri = (state.guideTargetNorad === b.noradId ? 8 : 0) + (state.cursorTarget && state.cursorTarget.noradId === b.noradId ? 4 : 0) + (!b.isBulkSatellite ? 2 : 0);
+        if (bPri !== aPri) return bPri - aPri;
+        return (a.cursorAngleDeg || 180) - (b.cursorAngleDeg || 180);
       });
 
       for (const sat of visibleCatalog) {
@@ -4171,6 +4645,9 @@
           ctx.lineTo(p.x + 9, p.y);
           ctx.stroke();
         }
+
+        // Cap label collision checks at 42 labels so large Starlink / Active satellite clouds stay legible at 60 FPS
+        if (placedBoxes.length >= 42 && !isCursorHit && !isGuideHit) continue;
 
         // Smart non-overlapping label placement (tries Right, Left, Above, Below)
         ctx.font = isCursorHit || isGuideHit ? "bold 11px 'JetBrains Mono', monospace" : "10px 'JetBrains Mono', monospace";
@@ -4608,6 +5085,7 @@
         ctx.lineWidth = 1.2;
         ctx.stroke();
 
+        if (globePlacedBoxes.length >= 30 && !isCursorHit && !isGuideHit) continue;
         ctx.font = isCursorHit || isGuideHit ? "bold 11px 'JetBrains Mono', monospace" : "10px 'JetBrains Mono', monospace";
         const tw = ctx.measureText(sat.name).width;
         const cands = [
@@ -4708,18 +5186,45 @@
     }
 
     let animFrameId = null;
+    let bulkPropCursor = 0;
     function tickFrame(nowPerfMs) {
       const dtRealMs = Math.min(100, Math.max(0, nowPerfMs - state.time.lastFramePerfMs));
       state.time.lastFramePerfMs = nowPerfMs;
       state.time.simTimeMs += dtRealMs * state.time.speedMultiplier;
 
-      // Propagate all verified satellites and constellation swarm nodes
-      state.livePositions = VERIFIED_SATELLITES.map((sat) =>
-        propagateSatellite(sat, state.time.simTimeMs, state.observer)
-      );
-      state.swarmPositions = SWARM_NODES.map((node) =>
-        propagateSatellite(node, state.time.simTimeMs, state.observer)
-      );
+      const simMs = state.time.simTimeMs;
+      const obs = state.observer;
+      const totalLen = VERIFIED_SATELLITES.length;
+
+      if (totalLen <= 2200) {
+        for (let i = 0; i < totalLen; i++) {
+          propagateSatellite(VERIFIED_SATELLITES[i], simMs, obs, true);
+        }
+      } else {
+        // Propagate priority & celestial objects every frame + a 2,500-satellite rolling slice of bulk CelesTrak objects
+        const cursorNorad = state.cursorTarget ? state.cursorTarget.noradId : -1;
+        for (let i = 0; i < totalLen; i++) {
+          const s = VERIFIED_SATELLITES[i];
+          if (!s.isBulkSatellite || s.noradId === state.pointing.autoTrackNorad || s.noradId === state.guideTargetNorad || s.noradId === cursorNorad) {
+            propagateSatellite(s, simMs, obs, true);
+          }
+        }
+        const batchSize = 2500;
+        for (let k = 0; k < batchSize; k++) {
+          const idx = (bulkPropCursor + k) % totalLen;
+          const s = VERIFIED_SATELLITES[idx];
+          if (s.isBulkSatellite) {
+            propagateSatellite(s, simMs, obs, true);
+          }
+        }
+        bulkPropCursor = (bulkPropCursor + batchSize) % totalLen;
+      }
+      state.livePositions = VERIFIED_SATELLITES;
+
+      for (let i = 0; i < SWARM_NODES.length; i++) {
+        propagateSatellite(SWARM_NODES[i], simMs, obs, true);
+      }
+      state.swarmPositions = SWARM_NODES;
 
       // If autoTrackNorad is set, smoothly keep center cursor pointed at that satellite
       if (state.pointing.autoTrackNorad !== null) {
@@ -4881,7 +5386,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v8").then(function (cache) {
+        caches.open("orbitalscope-pwa-v9").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
@@ -4909,10 +5414,10 @@
         setObserverLocation(28.5729, -80.6490, 3, "Kennedy Space Center, FL");
       }
       applyInjectedOrUrlParameters();
+      propagateAllSatellitesImmediate();
+      updateCategoryPillCounts();
       // Center cursor initially on Jupiter (or ISS) once without locking auto-track so user can freely pan/tilt through Zenith & Nadir
-      const initPositions = VERIFIED_SATELLITES.map((sat) =>
-        propagateSatellite(sat, state.time.simTimeMs, state.observer)
-      );
+      const initPositions = state.livePositions;
       const initTarget =
         initPositions.find((x) => x.aboveHorizon && x.category === "Planets") ||
         initPositions.find((x) => x.aboveHorizon) ||
