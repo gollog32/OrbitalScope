@@ -371,11 +371,9 @@
               </label>
             </div>
 
-            <div class="flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded-lg border border-slate-700">
-              <button type="button" onclick="adjustFov(-10)" class="px-2 py-0.5 rounded hover:bg-slate-700 text-cyan-300 font-bold" title="Zoom In">+</button>
-              <span class="text-[10px] text-slate-400 px-1">ZOOM</span>
-              <button type="button" onclick="adjustFov(10)" class="px-2 py-0.5 rounded hover:bg-slate-700 text-cyan-300 font-bold" title="Zoom Out">&minus;</button>
-            </div>
+            <button id="btnDefaultZoom" type="button" onclick="resetDefaultFov()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-semibold transition" title="Reset Field of View to Default 65 deg (Pinch Viewport to Zoom)">
+              Default Zoom
+            </button>
           </div>
 
           <div id="guideStatusBanner" class="text-[11px] text-amber-300 font-semibold">
@@ -3903,8 +3901,14 @@
     }
 
     function adjustFov(delta) {
-      state.pointing.fov = Math.max(25, Math.min(120, state.pointing.fov + delta));
+      state.pointing.fov = Math.max(15, Math.min(120, state.pointing.fov + delta));
       syncGimbalSlidersFromPointing();
+    }
+
+    function resetDefaultFov() {
+      state.pointing.fov = 65.0;
+      syncGimbalSlidersFromPointing();
+      showToast("Reset zoom to default 65\u00b0 FOV.");
     }
 
     function updateCursorAperture(val) {
@@ -5323,21 +5327,53 @@
     }
 
     // =========================================================================
-    // 11. POINTER / TOUCH GESTURE STEERING ON VIEWPORT CANVAS
+    // 11. POINTER / TOUCH GESTURE STEERING & PINCH-TO-ZOOM ON VIEWPORT CANVAS
     // =========================================================================
+    const activePointers = new Map();
     let isDragging = false;
+    let wasPinching = false;
     let lastDragX = 0;
     let lastDragY = 0;
+    let pinchStartDist = 0;
+    let pinchStartFov = 65.0;
+
+    function getTwoPointerDistance() {
+      const pts = Array.from(activePointers.values());
+      if (pts.length < 2) return 0;
+      return Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+    }
 
     canvas.addEventListener("pointerdown", (e) => {
-      isDragging = true;
-      lastDragX = e.clientX;
-      lastDragY = e.clientY;
-      canvas.setPointerCapture(e.pointerId);
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+      if (activePointers.size === 1) {
+        isDragging = true;
+        wasPinching = false;
+        lastDragX = e.clientX;
+        lastDragY = e.clientY;
+      } else if (activePointers.size >= 2) {
+        isDragging = false;
+        wasPinching = true;
+        pinchStartDist = getTwoPointerDistance();
+        pinchStartFov = state.pointing.fov;
+      }
     });
 
     canvas.addEventListener("pointermove", (e) => {
-      if (!isDragging) return;
+      if (!activePointers.has(e.pointerId)) return;
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (activePointers.size >= 2) {
+        const dist = getTwoPointerDistance();
+        if (pinchStartDist > 8 && dist > 8) {
+          const ratio = pinchStartDist / dist;
+          state.pointing.fov = Math.max(15, Math.min(120, pinchStartFov * ratio));
+          syncGimbalSlidersFromPointing();
+        }
+        return;
+      }
+
+      if (!isDragging || wasPinching) return;
       const dx = e.clientX - lastDragX;
       const dy = e.clientY - lastDragY;
       lastDragX = e.clientX;
@@ -5360,9 +5396,58 @@
       }
     });
 
-    canvas.addEventListener("pointerup", () => {
-      isDragging = false;
-    });
+    function handlePointerEnd(e) {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size === 0) {
+        isDragging = false;
+        wasPinching = false;
+        pinchStartDist = 0;
+      } else if (activePointers.size === 1) {
+        const remaining = Array.from(activePointers.values())[0];
+        lastDragX = remaining.x;
+        lastDragY = remaining.y;
+        isDragging = true;
+        wasPinching = false;
+      }
+    }
+
+    canvas.addEventListener("pointerup", handlePointerEnd);
+    canvas.addEventListener("pointercancel", handlePointerEnd);
+
+    // Fallback native iOS multi-touch pinch-to-zoom & desktop wheel zoom
+    canvas.addEventListener("touchstart", (e) => {
+      if (e.touches && e.touches.length === 2) {
+        e.preventDefault();
+        wasPinching = true;
+        isDragging = false;
+        pinchStartDist = Math.hypot(
+          e.touches[1].clientX - e.touches[0].clientX,
+          e.touches[1].clientY - e.touches[0].clientY
+        );
+        pinchStartFov = state.pointing.fov;
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("touchmove", (e) => {
+      if (e.touches && e.touches.length === 2 && pinchStartDist > 8) {
+        e.preventDefault();
+        const dist = Math.hypot(
+          e.touches[1].clientX - e.touches[0].clientX,
+          e.touches[1].clientY - e.touches[0].clientY
+        );
+        if (dist > 8) {
+          state.pointing.fov = Math.max(15, Math.min(120, pinchStartFov * (pinchStartDist / dist)));
+          syncGimbalSlidersFromPointing();
+        }
+      }
+    }, { passive: false });
+
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 4 : -4;
+      state.pointing.fov = Math.max(15, Math.min(120, state.pointing.fov + delta));
+      syncGimbalSlidersFromPointing();
+    }, { passive: false });
 
     // =========================================================================
     // 12. MAIN 60 FPS REAL-TIME ANIMATION LOOP
@@ -5578,7 +5663,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v11").then(function (cache) {
+        caches.open("orbitalscope-pwa-v12").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
