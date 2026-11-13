@@ -294,6 +294,9 @@
             <button type="button" onclick="snapToNearestSatellite()" class="bg-slate-800 hover:bg-cyan-500/20 px-2.5 py-1 rounded-lg text-[11px] text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition">
               <span>Snap Nearest</span>
             </button>
+            <button id="btnRealignMag" type="button" onclick="realignMagCompass()" class="bg-cyan-500/20 hover:bg-cyan-500/30 px-2.5 py-1 rounded-lg text-[11px] text-cyan-200 border border-cyan-400/40 flex items-center gap-1 transition" title="Take a single fresh Magnetic Compass reading to correct accelerometer/gyro drift, then lock back to steady accel/gyro">
+              <span>Realign Mag</span>
+            </button>
             <button id="btnSightAlign" type="button" onclick="calibrateCompassToTarget()" class="bg-amber-500/20 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg text-[11px] text-amber-200 border border-amber-400/40 flex items-center gap-1 transition" title="Point phone at the real Moon, Saturn, or active target in the sky and tap to calibrate compass &amp; pitch offset">
               <span>1-Tap Sight Align</span>
             </button>
@@ -353,6 +356,10 @@
               <label class="flex items-center gap-1 cursor-pointer">
                 <input id="chkShowSatellites" type="checkbox" checked onchange="toggleDisplayOption('satellites', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
                 <span class="text-cyan-200">Earth Sats</span>
+              </label>
+              <label class="flex items-center gap-1 cursor-pointer" title="Starlink satellites are hidden by default; check to display Starlink constellation">
+                <input id="chkShowStarlink" type="checkbox" onchange="toggleDisplayOption('starlink', this.checked)" class="rounded text-sky-400 focus:ring-0" />
+                <span class="text-sky-300">Starlink</span>
               </label>
               <label class="flex items-center gap-1 cursor-pointer">
                 <input id="chkShowOrbits" type="checkbox" checked onchange="toggleDisplayOption('orbits', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
@@ -2606,7 +2613,9 @@
         applyMagDeclination: true,
         magDeclinationDeg: 0.0,
         userAzTrimDeg: 0.0,
-        userElTrimDeg: 0.0
+        userElTrimDeg: 0.0,
+        pendingMagSync: true,
+        magCompassSynced: false
       },
       globeRotation: {
         lon: -80.6490,
@@ -2633,7 +2642,8 @@
         showGalaxies: true,
         showComets: true,
         showDeepSpace: true,
-        showSatellites: true
+        showSatellites: true,
+        showStarlink: false
       },
       livePositions: [],
       swarmPositions: [],
@@ -3658,17 +3668,33 @@
       showToast("Reset sight-alignment trim to 0.0\u00b0.");
     }
 
+    function realignMagCompass() {
+      if (!state.pointing.compassActive) {
+        toggleCompassSensors();
+        return;
+      }
+      state.pointing.pendingMagSync = true;
+      showToast("Reading Magnetic Compass once to realign, then locking to steady Accel/Gyro...");
+    }
+
     function activateOrientationListeners() {
       state.pointing.compassActive = true;
       state.pointing.autoTrackNorad = null;
+      state.pointing.pendingMagSync = true;
+      state.pointing.magCompassSynced = false;
       document.getElementById("btnUnlockTrack").classList.add("hidden");
       if (state.observer.gpsMode === "default" && navigator.geolocation) {
         requestHardwareGps();
       }
-      window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-      window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+      // Use a single consistent event stream on iOS (deviceorientation) so dual-event alpha references never fight
+      if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+      } else {
+        window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+      }
       updateCompassUiStatus();
-      showToast("Live Compass & 3D Gyro active! Point at Moon/Saturn & tap 1-Tap Sight Align to zero out case/mag bias.");
+      showToast("Startup Mag Compass read locked! Tracking via steady Accel/Gyro (tap Realign Mag anytime).");
     }
 
     function handleDeviceOrientation(event) {
@@ -3677,19 +3703,16 @@
       const beta = typeof event.beta === "number" && event.beta !== null ? event.beta : 90;
       const gamma = typeof event.gamma === "number" && event.gamma !== null ? event.gamma : 0;
 
-      // 1. Calibrate pure Z-axis yaw offset (compassOffsetDeg) between iOS webkitCompassHeading (+Y/forward heading)
-      // and the unrolled W3C yaw angle (360 - alpha) so sideways wrist roll (gamma) NEVER skews the azimuth!
+      // 1. One-shot Magnetic Compass Read at Startup (or when user taps "Realign Mag"):
+      // Never continuously blend webkitCompassHeading after startup so magnetometer jitter cannot cause the view to wobble or wander!
       const unrolledGyroYaw = normalizeAngle360(360.0 - alpha);
-      if (typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading)) {
+      if (state.pointing.pendingMagSync && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
         const wHeading = event.webkitCompassHeading;
-        if (typeof state.pointing.compassOffsetDeg !== "number") {
-          const initHeading = Math.abs(beta) > 135 ? normalizeAngle360(wHeading + 180) : wHeading;
-          state.pointing.compassOffsetDeg = normalizeAngle360(initHeading - unrolledGyroYaw);
-        } else if (beta >= 35 && beta <= 105 && Math.abs(gamma) <= 12) {
-          const desiredOffset = normalizeAngle360(wHeading - unrolledGyroYaw);
-          let diff = ((desiredOffset - state.pointing.compassOffsetDeg + 540) % 360) - 180;
-          state.pointing.compassOffsetDeg = normalizeAngle360(state.pointing.compassOffsetDeg + diff * 0.06);
-        }
+        const initHeading = Math.abs(beta) > 135 ? normalizeAngle360(wHeading + 180) : wHeading;
+        state.pointing.compassOffsetDeg = normalizeAngle360(initHeading - unrolledGyroYaw);
+        state.pointing.pendingMagSync = false;
+        state.pointing.magCompassSynced = true;
+        updateCompassUiStatus();
       } else if (typeof state.pointing.compassOffsetDeg !== "number") {
         state.pointing.compassOffsetDeg = 0;
       }
@@ -3734,7 +3757,7 @@
       const modeTag = document.getElementById("pointingModeTag");
       if (state.pointing.compassActive) {
         label.textContent = "Compass: LIVE SENSOR";
-        modeTag.textContent = "LIVE COMPASS + GYRO";
+        modeTag.textContent = state.pointing.magCompassSynced ? "ACCEL/GYRO (MAG LOCKED)" : "READING MAG COMPASS...";
       } else if (state.pointing.autoTrackNorad) {
         label.textContent = "Compass: Auto-Tracking";
         modeTag.textContent = "AUTO-TRACK LOCK";
@@ -3925,6 +3948,7 @@
       if (type === "comets") state.filters.showComets = checked;
       if (type === "deepspace") state.filters.showDeepSpace = checked;
       if (type === "satellites") state.filters.showSatellites = checked;
+      if (type === "starlink") state.filters.showStarlink = checked;
       renderSatelliteList();
     }
 
@@ -4043,6 +4067,9 @@
       } else if (cat === "Deep Space") {
         state.filters.showDeepSpace = true;
         document.getElementById("chkShowDeepSpace").checked = true;
+      } else if (cat === "Communications") {
+        state.filters.showSatellites = true;
+        document.getElementById("chkShowSatellites").checked = true;
       }
       document.querySelectorAll(".cat-pill").forEach((btn) => {
         if (btn.getAttribute("data-cat") === cat) {
@@ -4065,6 +4092,11 @@
       state.filters.showSatellites = true;
       document.getElementById("chkShowSwarm").checked = true;
       document.getElementById("chkShowSatellites").checked = true;
+      if (constName === "Starlink") {
+        state.filters.showStarlink = true;
+        const chkSl = document.getElementById("chkShowStarlink");
+        if (chkSl) chkSl.checked = true;
+      }
       document.querySelectorAll(".swarm-btn").forEach((btn) => {
         if (btn.id === `swarmBtn_${constName}`) {
           btn.className = "swarm-btn px-2.5 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-left transition";
@@ -4107,12 +4139,21 @@
             if (sat.category === "Deep Space" && !state.filters.showDeepSpace) return false;
             if (!sat.isCelestial) {
               if (!state.filters.showSatellites) return false;
+              const isStarlinkSat = sat.constellation === "Starlink" || sat.name.includes("STARLINK");
+              if (isStarlinkSat && !state.filters.showStarlink && activeSwarmConst !== "Starlink") {
+                return false;
+              }
               if (activeSwarmConst && activeSwarmConst !== "ALL" && sat.isBulkSatellite && sat.constellation !== activeSwarmConst) {
                 return false;
               }
             }
           } else if (sat.category !== state.filters.category) {
             return false;
+          } else if (sat.category === "Communications") {
+            const isStarlinkSat = sat.constellation === "Starlink" || sat.name.includes("STARLINK");
+            if (isStarlinkSat && !state.filters.showStarlink && activeSwarmConst !== "Starlink") {
+              return false;
+            }
           }
         } else if (state.filters.category !== "ALL" && sat.category !== state.filters.category && !isExplicitlySelected) {
           return false;
@@ -4241,7 +4282,7 @@
       if (state.filters.showSwarm) {
         const swarmFiltered =
           state.filters.swarmConstellation === "ALL"
-            ? state.swarmPositions
+            ? state.swarmPositions.filter((n) => state.filters.showStarlink || n.constellation !== "Starlink")
             : state.swarmPositions.filter((n) => n.constellation === state.filters.swarmConstellation);
         candidates.push(...swarmFiltered);
       }
@@ -4594,7 +4635,7 @@
       if (state.filters.showSwarm) {
         const swarmList =
           state.filters.swarmConstellation === "ALL"
-            ? state.swarmPositions
+            ? state.swarmPositions.filter((n) => state.filters.showStarlink || n.constellation !== "Starlink")
             : state.swarmPositions.filter((n) => n.constellation === state.filters.swarmConstellation);
 
         for (const node of swarmList) {
@@ -5189,7 +5230,7 @@
       if (state.filters.showSwarm) {
         const swarmList =
           state.filters.swarmConstellation === "ALL"
-            ? state.swarmPositions
+            ? state.swarmPositions.filter((n) => state.filters.showStarlink || n.constellation !== "Starlink")
             : state.swarmPositions.filter((n) => n.constellation === state.filters.swarmConstellation);
 
         for (const node of swarmList) {
@@ -5537,7 +5578,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v10").then(function (cache) {
+        caches.open("orbitalscope-pwa-v11").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
