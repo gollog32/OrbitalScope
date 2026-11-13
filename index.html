@@ -353,7 +353,7 @@
                 <input id="chkShowDeepSpace" type="checkbox" checked onchange="toggleDisplayOption('deepspace', this.checked)" class="rounded text-rose-400 focus:ring-0" />
                 <span class="text-rose-200">Deep Space</span>
               </label>
-              <label class="flex items-center gap-1 cursor-pointer">
+              <label class="flex items-center gap-1 cursor-pointer" title="Earth satellites are hidden by default; check to display Earth-orbiting satellites">
                 <input id="chkShowSatellites" type="checkbox" onchange="toggleDisplayOption('satellites', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
                 <span class="text-cyan-200">Earth Sats</span>
               </label>
@@ -377,7 +377,7 @@
           </div>
 
           <div id="guideStatusBanner" class="text-[11px] text-amber-300 font-semibold">
-            Default Sky: Common Stars, 5 Largest Black Holes + Sgr A*, Planets, Galaxies &amp; Major Satellites
+            Default Sky: Common Stars, 5 Largest Black Holes + Sgr A*, Planets, Galaxies, Comets &amp; Deep Space
           </div>
         </div>
       </div>
@@ -2640,7 +2640,7 @@
         showGalaxies: true,
         showComets: true,
         showDeepSpace: true,
-        showSatellites: true,
+        showSatellites: false,
         showStarlink: false
       },
       livePositions: [],
@@ -4142,10 +4142,11 @@
             if (sat.category === "Comets" && !state.filters.showComets) return false;
             if (sat.category === "Deep Space" && !state.filters.showDeepSpace) return false;
             if (!sat.isCelestial) {
-              if (!state.filters.showSatellites) return false;
               const isStarlinkSat = sat.constellation === "Starlink" || sat.name.includes("STARLINK");
-              if (isStarlinkSat && !state.filters.showStarlink && activeSwarmConst !== "Starlink") {
-                return false;
+              if (isStarlinkSat) {
+                if (!state.filters.showStarlink && activeSwarmConst !== "Starlink") return false;
+              } else {
+                if (!state.filters.showSatellites) return false;
               }
               if (activeSwarmConst && activeSwarmConst !== "ALL" && sat.isBulkSatellite && sat.constellation !== activeSwarmConst) {
                 return false;
@@ -5663,7 +5664,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v12").then(function (cache) {
+        caches.open("orbitalscope-pwa-v13").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
