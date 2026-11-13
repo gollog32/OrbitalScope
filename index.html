@@ -294,6 +294,12 @@
             <button type="button" onclick="snapToNearestSatellite()" class="bg-slate-800 hover:bg-cyan-500/20 px-2.5 py-1 rounded-lg text-[11px] text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition">
               <span>Snap Nearest</span>
             </button>
+            <button id="btnSightAlign" type="button" onclick="calibrateCompassToTarget()" class="bg-amber-500/20 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg text-[11px] text-amber-200 border border-amber-400/40 flex items-center gap-1 transition" title="Point phone at the real Moon, Saturn, or active target in the sky and tap to calibrate compass &amp; pitch offset">
+              <span>1-Tap Sight Align</span>
+            </button>
+            <button id="btnResetAlign" type="button" onclick="resetCompassCalibration()" class="hidden bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition" title="Reset compass sight-alignment trim to 0">
+              <span>Reset Align</span>
+            </button>
             <button id="btnClearGuide" type="button" onclick="clearGuideTarget()" class="hidden bg-amber-500/20 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg text-[11px] text-amber-200 border border-amber-400/50 transition">
               Clear Guide Arrow
             </button>
@@ -484,6 +490,25 @@
               <option value="300">300&times; (5 min / sec)</option>
               <option value="0">Paused</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Compass Declination & 1-Tap Sight Alignment Trim Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80 font-mono-tech text-[11px]">
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300" title="Apply NOAA WMM magnetic declination offset from Magnetic North to True North">
+              <input id="chkMagDeclination" type="checkbox" checked onchange="toggleMagDeclination(this.checked)" class="rounded text-cyan-400 focus:ring-0" />
+              <span id="magDeclinationLabel">WMM Mag Declination: Auto</span>
+            </label>
+            <span id="compassTrimBadge" class="px-2 py-0.5 rounded bg-slate-900 text-amber-300 border border-slate-800">
+              Sight Trim: 0.0&deg; Az / 0.0&deg; El
+            </span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button type="button" onclick="nudgeCompassTrim(-2, 0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Azimuth -2 deg">&minus;2&deg; Az</button>
+            <button type="button" onclick="nudgeCompassTrim(2, 0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Azimuth +2 deg">+2&deg; Az</button>
+            <button type="button" onclick="nudgeCompassTrim(0, -2)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Elevation -2 deg">&minus;2&deg; El</button>
+            <button type="button" onclick="nudgeCompassTrim(0, 2)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Elevation +2 deg">+2&deg; El</button>
           </div>
         </div>
       </div>
@@ -2575,7 +2600,13 @@
         cursorRadiusDeg: 6.0,
         compassActive: false,
         autoTrackNorad: null,
-        camVec: [0, 1, 0]
+        camVec: [0, 1, 0],
+        rawSensorAz: 147.9,
+        rawSensorEl: 32.0,
+        applyMagDeclination: true,
+        magDeclinationDeg: 0.0,
+        userAzTrimDeg: 0.0,
+        userElTrimDeg: 0.0
       },
       globeRotation: {
         lon: -80.6490,
@@ -3501,14 +3532,143 @@
       }
     }
 
+    // NOAA WMM2025/2026 Magnetic Declination approximation (East positive, West negative, in degrees)
+    function computeMagneticDeclinationDeg(latDeg, lonDeg) {
+      const phi = latDeg * DEG2RAD;
+      const lam = lonDeg * DEG2RAD;
+      let decl = -0.36 * (lonDeg + 87.5) * Math.cos(phi * 0.72);
+      if (lonDeg >= -130 && lonDeg <= -60 && latDeg >= 15 && latDeg <= 60) {
+        // High-precision fit across the continental United States (WMM2025)
+        decl = -0.445 * (lonDeg + 88.8) + 0.04 * (latDeg - 32.0);
+      } else {
+        const poleLat = 80.8 * DEG2RAD;
+        const poleLon = -72.7 * DEG2RAD;
+        const y = Math.cos(poleLat) * Math.sin(poleLon - lam);
+        const x = Math.cos(phi) * Math.sin(poleLat) - Math.sin(phi) * Math.cos(poleLat) * Math.cos(poleLon - lam);
+        decl = Math.atan2(y, x) * RAD2DEG;
+      }
+      return Math.max(-35, Math.min(35, Number(decl.toFixed(2))));
+    }
+
+    function updateCompassCalibrationUi() {
+      const decl = computeMagneticDeclinationDeg(state.observer.lat, state.observer.lon);
+      state.pointing.magDeclinationDeg = decl;
+      const declSign = decl >= 0 ? "+" : "";
+      const declLabel = document.getElementById("magDeclinationLabel");
+      if (declLabel) {
+        declLabel.textContent = state.pointing.applyMagDeclination
+          ? `WMM Mag Decl: ${declSign}${decl.toFixed(1)}\u00b0 (${decl >= 0 ? "E" : "W"})`
+          : `WMM Mag Decl: Off (0.0\u00b0)`;
+      }
+      const trimBadge = document.getElementById("compassTrimBadge");
+      if (trimBadge) {
+        const azS = state.pointing.userAzTrimDeg >= 0 ? "+" : "";
+        const elS = state.pointing.userElTrimDeg >= 0 ? "+" : "";
+        trimBadge.textContent = `Sight Trim: ${azS}${state.pointing.userAzTrimDeg.toFixed(1)}\u00b0 Az / ${elS}${state.pointing.userElTrimDeg.toFixed(1)}\u00b0 El`;
+      }
+      const resetBtn = document.getElementById("btnResetAlign");
+      if (resetBtn) {
+        if (Math.abs(state.pointing.userAzTrimDeg) > 0.05 || Math.abs(state.pointing.userElTrimDeg) > 0.05) {
+          resetBtn.classList.remove("hidden");
+        } else {
+          resetBtn.classList.add("hidden");
+        }
+      }
+    }
+
+    function saveCompassTrimToStorage() {
+      try {
+        localStorage.setItem("orbitalscope_compass_trim_v1", JSON.stringify({
+          userAzTrimDeg: state.pointing.userAzTrimDeg,
+          userElTrimDeg: state.pointing.userElTrimDeg,
+          applyMagDeclination: state.pointing.applyMagDeclination
+        }));
+      } catch (e) {}
+    }
+
+    function loadCompassTrimFromStorage() {
+      try {
+        const raw = JSON.parse(localStorage.getItem("orbitalscope_compass_trim_v1") || "null");
+        if (raw && typeof raw === "object") {
+          if (typeof raw.userAzTrimDeg === "number") state.pointing.userAzTrimDeg = raw.userAzTrimDeg;
+          if (typeof raw.userElTrimDeg === "number") state.pointing.userElTrimDeg = raw.userElTrimDeg;
+          if (typeof raw.applyMagDeclination === "boolean") {
+            state.pointing.applyMagDeclination = raw.applyMagDeclination;
+            const chk = document.getElementById("chkMagDeclination");
+            if (chk) chk.checked = raw.applyMagDeclination;
+          }
+        }
+      } catch (e) {}
+      updateCompassCalibrationUi();
+    }
+
+    function toggleMagDeclination(checked) {
+      state.pointing.applyMagDeclination = Boolean(checked);
+      saveCompassTrimToStorage();
+      updateCompassCalibrationUi();
+      showToast(checked ? `Applied WMM Magnetic Declination (${state.pointing.magDeclinationDeg >= 0 ? "+" : ""}${state.pointing.magDeclinationDeg.toFixed(1)}\u00b0)` : "Magnetic declination correction disabled.");
+    }
+
+    function nudgeCompassTrim(dAz, dEl) {
+      state.pointing.userAzTrimDeg = normalizeLon180(state.pointing.userAzTrimDeg + dAz);
+      state.pointing.userElTrimDeg = Math.max(-35, Math.min(35, state.pointing.userElTrimDeg + dEl));
+      if (!state.pointing.compassActive) {
+        state.pointing.az = normalizeAngle360(state.pointing.az + dAz);
+        state.pointing.el = Math.max(-90, Math.min(90, state.pointing.el + dEl));
+        syncGimbalSlidersFromPointing();
+      }
+      saveCompassTrimToStorage();
+      updateCompassCalibrationUi();
+    }
+
+    function calibrateCompassToTarget() {
+      const refTarget =
+        (state.guideTargetNorad && SAT_BY_NORAD.get(state.guideTargetNorad)) ||
+        state.cursorTarget ||
+        state.livePositions.find((s) => s.name === "SATURN" && s.aboveHorizon) ||
+        state.livePositions.find((s) => s.name === "THE MOON (LUNA)" && s.aboveHorizon) ||
+        state.nearestSatellite;
+
+      if (!refTarget) {
+        showToast("Select a target (like Saturn or The Moon) first to sight-align.");
+        return;
+      }
+
+      if (state.pointing.compassActive) {
+        const declOffset = state.pointing.applyMagDeclination ? state.pointing.magDeclinationDeg : 0;
+        const baseAz = normalizeAngle360(state.pointing.rawSensorAz + declOffset);
+        const baseEl = state.pointing.rawSensorEl;
+        state.pointing.userAzTrimDeg = Number(normalizeLon180(refTarget.azDeg - baseAz).toFixed(2));
+        state.pointing.userElTrimDeg = Number(Math.max(-35, Math.min(35, refTarget.elDeg - baseEl)).toFixed(2));
+      } else {
+        state.pointing.az = refTarget.azDeg;
+        state.pointing.el = refTarget.elDeg;
+        syncGimbalSlidersFromPointing();
+      }
+      saveCompassTrimToStorage();
+      updateCompassCalibrationUi();
+      showToast(`Sight-aligned compass to ${refTarget.name} (Trim: ${state.pointing.userAzTrimDeg >= 0 ? "+" : ""}${state.pointing.userAzTrimDeg.toFixed(1)}\u00b0 Az, ${state.pointing.userElTrimDeg >= 0 ? "+" : ""}${state.pointing.userElTrimDeg.toFixed(1)}\u00b0 El)`);
+    }
+
+    function resetCompassCalibration() {
+      state.pointing.userAzTrimDeg = 0.0;
+      state.pointing.userElTrimDeg = 0.0;
+      saveCompassTrimToStorage();
+      updateCompassCalibrationUi();
+      showToast("Reset sight-alignment trim to 0.0\u00b0.");
+    }
+
     function activateOrientationListeners() {
       state.pointing.compassActive = true;
       state.pointing.autoTrackNorad = null;
       document.getElementById("btnUnlockTrack").classList.add("hidden");
+      if (state.observer.gpsMode === "default" && navigator.geolocation) {
+        requestHardwareGps();
+      }
       window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
       window.addEventListener("deviceorientation", handleDeviceOrientation, true);
       updateCompassUiStatus();
-      showToast("Smartphone Compass & Gyroscope active! Tilt/rotate phone or use gimbal sliders.");
+      showToast("Live Compass & 3D Gyro active! Point at Moon/Saturn & tap 1-Tap Sight Align to zero out case/mag bias.");
     }
 
     function handleDeviceOrientation(event) {
@@ -3517,50 +3677,35 @@
       const beta = typeof event.beta === "number" && event.beta !== null ? event.beta : 90;
       const gamma = typeof event.gamma === "number" && event.gamma !== null ? event.gamma : 0;
 
-      // 1. Compute the continuous 3D back-camera vector (-Z in device frame) from W3C (alpha, beta, gamma)
-      // R = Rz(alpha) * Rx(beta) * Ry(gamma) applied to [0, 0, -1]^T:
-      // This 3D gyroscope vector is 100% continuous across -90 deg (Nadir), 0 deg (Horizon), +45 deg, and +90 deg (Zenith)
-      // and NEVER suffers from iOS webkitCompassHeading's 1D axis flip at ~45 deg elevation (beta ~ 135 deg).
-      const aRad = alpha * DEG2RAD;
-      const bRad = beta * DEG2RAD;
-      const gRad = gamma * DEG2RAD;
-
-      const cA = Math.cos(aRad), sA = Math.sin(aRad);
-      const cB = Math.cos(bRad), sB = Math.sin(bRad);
-      const cG = Math.cos(gRad), sG = Math.sin(gRad);
-
-      const rA = -cA * sG - sA * sB * cG;
-      const rB = -sA * sG + cA * sB * cG;
-      const rC = -cB * cG;
-
-      const horizMag = Math.hypot(rA, rB);
-      const gyroAzDeg = horizMag > 0.04 ? normalizeAngle360(Math.atan2(rA, rB) * RAD2DEG) : state.pointing.az;
-
-      // 2. Calibrate the magnetic north offset (compassOffsetDeg) between webkitCompassHeading and gyroAzDeg
-      // ONLY in the stable upright posture (40 deg <= beta <= 115 deg, |gamma| < 35 deg) where iOS webkitCompassHeading
-      // does not flip, or initialize once on first sensor reading.
-      if (typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && horizMag > 0.2) {
+      // 1. Calibrate pure Z-axis yaw offset (compassOffsetDeg) between iOS webkitCompassHeading (+Y/forward heading)
+      // and the unrolled W3C yaw angle (360 - alpha) so sideways wrist roll (gamma) NEVER skews the azimuth!
+      const unrolledGyroYaw = normalizeAngle360(360.0 - alpha);
+      if (typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading)) {
         const wHeading = event.webkitCompassHeading;
         if (typeof state.pointing.compassOffsetDeg !== "number") {
-          // On initial lock, if user is already tilting phone overhead past 45 deg elevation (beta > 135 deg),
-          // iOS webkitCompassHeading is inverted by 180 deg.
-          const initTrueHeading = Math.abs(beta) > 135 ? normalizeAngle360(wHeading + 180) : wHeading;
-          state.pointing.compassOffsetDeg = normalizeAngle360(initTrueHeading - gyroAzDeg);
-        } else if (beta >= 40 && beta <= 115 && Math.abs(gamma) < 35) {
-          const desiredOffset = normalizeAngle360(wHeading - gyroAzDeg);
+          const initHeading = Math.abs(beta) > 135 ? normalizeAngle360(wHeading + 180) : wHeading;
+          state.pointing.compassOffsetDeg = normalizeAngle360(initHeading - unrolledGyroYaw);
+        } else if (beta >= 35 && beta <= 105 && Math.abs(gamma) <= 12) {
+          const desiredOffset = normalizeAngle360(wHeading - unrolledGyroYaw);
           let diff = ((desiredOffset - state.pointing.compassOffsetDeg + 540) % 360) - 180;
-          state.pointing.compassOffsetDeg = normalizeAngle360(state.pointing.compassOffsetDeg + diff * 0.08);
+          state.pointing.compassOffsetDeg = normalizeAngle360(state.pointing.compassOffsetDeg + diff * 0.06);
         }
       } else if (typeof state.pointing.compassOffsetDeg !== "number") {
         state.pointing.compassOffsetDeg = 0;
       }
 
-      // 3. Rotate the continuous 3D camera vector (rA, rB, rC) by compassOffsetDeg into true East-North-Up (tx, ty, tz)
-      const offRad = (state.pointing.compassOffsetDeg || 0) * DEG2RAD;
-      const cosO = Math.cos(offRad), sinO = Math.sin(offRad);
-      const tx = rA * cosO + rB * sinO;
-      const ty = -rA * sinO + rB * cosO;
-      const tz = Math.max(-1, Math.min(1, rC));
+      // 2. Compute true W3C Z-yaw angle corrected by compassOffsetDeg, then apply full 3D rotation R = Rz(alphaTrue) * Rx(beta) * Ry(gamma) to [0, 0, -1]^T
+      const alphaTrueRad = normalizeAngle360(alpha - (state.pointing.compassOffsetDeg || 0)) * DEG2RAD;
+      const bRad = beta * DEG2RAD;
+      const gRad = gamma * DEG2RAD;
+
+      const cA = Math.cos(alphaTrueRad), sA = Math.sin(alphaTrueRad);
+      const cB = Math.cos(bRad),         sB = Math.sin(bRad);
+      const cG = Math.cos(gRad),         sG = Math.sin(gRad);
+
+      const tx = -cA * sG - sA * sB * cG;
+      const ty = -sA * sG + cA * sB * cG;
+      const tz = Math.max(-1, Math.min(1, -cB * cG));
 
       const prev = state.pointing.camVec || [tx, ty, tz];
       const blend = 0.30;
@@ -3573,10 +3718,14 @@
       nz /= len;
       state.pointing.camVec = [nx, ny, nz];
 
-      state.pointing.el = Math.max(-90, Math.min(90, Math.asin(Math.max(-1, Math.min(1, nz))) * RAD2DEG));
-      if (Math.hypot(nx, ny) > 0.05) {
-        state.pointing.az = normalizeAngle360(Math.atan2(nx, ny) * RAD2DEG);
-      }
+      const rawEl = Math.max(-90, Math.min(90, Math.asin(Math.max(-1, Math.min(1, nz))) * RAD2DEG));
+      const rawAz = Math.hypot(nx, ny) > 0.05 ? normalizeAngle360(Math.atan2(nx, ny) * RAD2DEG) : state.pointing.rawSensorAz;
+      state.pointing.rawSensorAz = rawAz;
+      state.pointing.rawSensorEl = rawEl;
+
+      const declOffset = state.pointing.applyMagDeclination ? state.pointing.magDeclinationDeg : 0;
+      state.pointing.az = normalizeAngle360(rawAz + declOffset + state.pointing.userAzTrimDeg);
+      state.pointing.el = Math.max(-90, Math.min(90, rawEl + state.pointing.userElTrimDeg));
       syncGimbalSlidersFromPointing();
     }
 
@@ -3656,6 +3805,8 @@
       document.getElementById("gpsHeaderLabel").textContent = `${label.split(",")[0]} (${Math.abs(state.observer.lat).toFixed(2)}\u00b0${ns})`;
       document.getElementById("hudObsCoords").textContent = `${Math.abs(state.observer.lat).toFixed(4)}\u00b0${ns}, ${Math.abs(state.observer.lon).toFixed(4)}\u00b0${ew} (${Math.round(state.observer.altMeters)}m)`;
       document.getElementById("gpsModalFeedback").textContent = `Current Observer: ${label} (${state.observer.lat.toFixed(4)}\u00b0, ${state.observer.lon.toFixed(4)}\u00b0, ${Math.round(state.observer.altMeters)} m)`;
+      updateCompassCalibrationUi();
+      propagateAllSatellitesImmediate();
     }
 
     function applyCustomGpsInputs() {
@@ -5386,7 +5537,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v9").then(function (cache) {
+        caches.open("orbitalscope-pwa-v10").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
@@ -5414,6 +5565,7 @@
         setObserverLocation(28.5729, -80.6490, 3, "Kennedy Space Center, FL");
       }
       applyInjectedOrUrlParameters();
+      loadCompassTrimFromStorage();
       propagateAllSatellitesImmediate();
       updateCategoryPillCounts();
       // Center cursor initially on Jupiter (or ISS) once without locking auto-track so user can freely pan/tilt through Zenith & Nadir
