@@ -72,6 +72,17 @@
     html, body { margin: 0; height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; display: flex; flex-direction: column; background-color: #050811; color: #f1f5f9; }
     .min-h-0 { min-height: 0; }
     .shrink-0 { flex-shrink: 0; }
+    .ios-safe-top {
+      padding-top: max(calc(env(safe-area-inset-top, 0px) + 10px), 56px) !important;
+    }
+    .ios-safe-bottom {
+      padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px) !important;
+    }
+    @media (min-width: 768px) and (pointer: fine) {
+      .ios-safe-top {
+        padding-top: 8px !important;
+      }
+    }
     .hidden { display: none !important; }
     .block { display: block; }
     .flex { display: flex; }
@@ -202,7 +213,7 @@
 <body class="h-full overflow-hidden flex flex-col bg-[#050811] text-slate-100 select-none">
 
   <!-- ZERO-SCROLL TOP BAR: Upper-Left Menu Button | Center Telemetry | Upper-Right Realign Mag Button -->
-  <header class="hud-glass shrink-0 z-30 px-2.5 py-1.5 border-b border-cyan-500/25">
+  <header class="hud-glass ios-safe-top shrink-0 z-30 px-2.5 pb-2 border-b border-cyan-500/25">
     <div class="max-w-7xl mx-auto flex items-center justify-between gap-1.5">
       <!-- Upper-Left: Menu Button -->
       <div class="flex items-center gap-2">
@@ -256,12 +267,12 @@
   </header>
 
   <!-- FIRST SCREEN MAIN WORKSPACE: Zero-Scroll Flex Column containing Sky Display + Information Box (+ Optional Gimbal Box) -->
-  <main class="flex-1 min-h-0 max-w-7xl w-full mx-auto flex flex-col gap-1.5 p-1.5 sm:p-2 overflow-hidden">
+  <main class="ios-safe-bottom flex-1 min-h-0 max-w-7xl w-full mx-auto flex flex-col gap-1.5 px-1.5 pt-1.5 sm:px-2 sm:pt-2 overflow-hidden">
 
     <!-- 1. SKY DISPLAY / 3D GLOBE VIEWPORT (Fills available height dynamically) -->
     <div class="hud-glass flex-1 min-h-0 rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl flex flex-col relative">
-      <div id="viewportContainer" class="relative flex-1 min-h-0 w-full bg-[#03060c] select-none touch-none" style="min-height: 180px;">
-        <canvas id="orbitalCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+      <div id="viewportContainer" class="relative flex-1 min-h-0 w-full h-full bg-[#03060c] select-none touch-none overflow-hidden" style="min-height: 160px; flex: 1 1 0%;">
+        <canvas id="orbitalCanvas" class="absolute inset-0 w-full h-full block cursor-crosshair" style="width: 100%; height: 100%; display: block;"></canvas>
       </div>
       <!-- Ultra-compact single-line guide status strip at bottom edge of sky display -->
       <div class="px-2.5 py-1 bg-slate-900/95 border-t border-slate-800/90 flex items-center justify-between gap-2 font-mono-tech text-[10px] shrink-0">
@@ -409,7 +420,7 @@
 
   <!-- UPPER-LEFT MENU DRAWER (Contains: 1. Search at Top, 2. Show/Hide Items + Gimbal Toggle, 3. All Other Selections) -->
   <div id="leftMenuModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex justify-start">
-    <aside class="hud-glass-active w-full max-w-md h-full overflow-y-auto p-3.5 flex flex-col gap-3 border-r border-cyan-400/40 shadow-2xl">
+    <aside class="hud-glass-active ios-safe-top w-full max-w-md h-full overflow-y-auto px-3.5 pb-6 flex flex-col gap-3 border-r border-cyan-400/40 shadow-2xl">
       <!-- Menu Header -->
       <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
         <div class="flex items-center gap-2">
@@ -2638,7 +2649,8 @@
         userAzTrimDeg: 0.0,
         userElTrimDeg: 0.0,
         pendingMagSync: true,
-        magCompassSynced: false
+        magCompassSynced: false,
+        sensorEventsReceiving: false
       },
       globeRotation: {
         lon: -80.6490,
@@ -3535,17 +3547,15 @@
     // =========================================================================
     // 6. SMARTPHONE COMPASS / GYROSCOPE & GPS INTEGRATION
     // =========================================================================
-    function toggleCompassSensors() {
-      if (state.pointing.compassActive) {
-        state.pointing.compassActive = false;
-        window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
-        window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-        updateCompassUiStatus();
-        showToast("Switched to manual touch/gimbal pointing mode.");
-        return;
+    function requestAndAttachOrientationStream(showFeedback = true) {
+      state.pointing.compassActive = true;
+      state.pointing.autoTrackNorad = null;
+      state.pointing.pendingMagSync = true;
+      document.getElementById("btnUnlockTrack").classList.add("hidden");
+      if (state.observer.gpsMode === "default" && navigator.geolocation) {
+        requestHardwareGps();
       }
 
-      // Check iOS 13+ permission API
       if (
         typeof DeviceOrientationEvent !== "undefined" &&
         typeof DeviceOrientationEvent.requestPermission === "function"
@@ -3553,17 +3563,46 @@
         DeviceOrientationEvent.requestPermission()
           .then((permissionState) => {
             if (permissionState === "granted") {
-              activateOrientationListeners();
-            } else {
+              // Remove any pre-permission listener first so iOS WebKit registers a fresh permitted listener
+              window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+              window.removeEventListener("deviceorientation", handleDeviceOrientation, false);
+              window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+              updateCompassUiStatus();
+              if (showFeedback) {
+                showToast("Live Sensor active! Startup Mag Compass locked to steady Accel/Gyro.");
+              }
+            } else if (showFeedback) {
+              state.pointing.compassActive = false;
+              updateCompassUiStatus();
               showToast("Compass permission declined; use touch drag or gimbal sliders.");
             }
           })
           .catch(() => {
-            activateOrientationListeners();
+            // Permission call requires a direct user tap gesture on iOS Safari; wait for next click/tap
+            updateCompassUiStatus();
           });
       } else {
-        activateOrientationListeners();
+        window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+        window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+        window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+        updateCompassUiStatus();
       }
+    }
+
+    function toggleCompassSensors() {
+      // If compassActive is true but iOS hasn't delivered events yet, request permission & attach instead of turning off!
+      if (state.pointing.compassActive && state.pointing.sensorEventsReceiving) {
+        state.pointing.compassActive = false;
+        state.pointing.sensorEventsReceiving = false;
+        window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
+        window.removeEventListener("deviceorientation", handleDeviceOrientation, false);
+        window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
+        updateCompassUiStatus();
+        showToast("Switched to manual touch/gimbal pointing mode.");
+        return;
+      }
+      requestAndAttachOrientationStream(true);
     }
 
     // NOAA WMM2025/2026 Magnetic Declination approximation (East positive, West negative, in degrees)
@@ -3693,8 +3732,8 @@
     }
 
     function realignMagCompass() {
-      if (!state.pointing.compassActive) {
-        toggleCompassSensors();
+      if (!state.pointing.compassActive || !state.pointing.sensorEventsReceiving) {
+        requestAndAttachOrientationStream(true);
         return;
       }
       state.pointing.pendingMagSync = true;
@@ -3707,22 +3746,21 @@
       state.pointing.pendingMagSync = true;
       state.pointing.magCompassSynced = false;
       document.getElementById("btnUnlockTrack").classList.add("hidden");
-      if (state.observer.gpsMode === "default" && navigator.geolocation) {
-        requestHardwareGps();
-      }
-      // Use a single consistent event stream on iOS (deviceorientation) so dual-event alpha references never fight
-      if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
-        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
-      } else {
+      // On non-iOS or already-permitted contexts, attach listener; on iOS, wait for requestPermission() so WebKit does not blacklist the listener
+      if (typeof DeviceOrientationEvent === "undefined" || typeof DeviceOrientationEvent.requestPermission !== "function") {
         window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
         window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+      } else {
+        requestAndAttachOrientationStream(false);
       }
       updateCompassUiStatus();
-      showToast("Startup Mag Compass read locked! Tracking via steady Accel/Gyro (tap Realign Mag anytime).");
     }
 
     function handleDeviceOrientation(event) {
       if (!state.pointing.compassActive) return;
+      if (typeof event.alpha === "number" || typeof event.beta === "number" || typeof event.webkitCompassHeading === "number") {
+        state.pointing.sensorEventsReceiving = true;
+      }
       const alpha = typeof event.alpha === "number" && event.alpha !== null ? event.alpha : 0;
       const beta = typeof event.beta === "number" && event.beta !== null ? event.beta : 90;
       const gamma = typeof event.gamma === "number" && event.gamma !== null ? event.gamma : 0;
@@ -5590,10 +5628,18 @@
         renderSatelliteList();
       }
 
-      // Render Viewport Canvas
+      // Render Viewport Canvas (auto-sync canvas pixel buffer to parent container height every frame so zero black bar ever appears)
       const rect = canvas.parentElement.getBoundingClientRect();
-      const w = rect.width;
-      const h = rect.height;
+      const w = Math.max(200, rect.width);
+      const h = Math.max(160, rect.height);
+      const dpr = window.devicePixelRatio || 1;
+      const targetW = Math.floor(w * dpr);
+      const targetH = Math.floor(h * dpr);
+      if (Math.abs(canvas.width - targetW) > 1 || Math.abs(canvas.height - targetH) > 1) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
 
       if (state.viewMode === "sky") {
         drawSkyPointerView(0, 0, w, h);
@@ -5727,7 +5773,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v14").then(function (cache) {
+        caches.open("orbitalscope-pwa-v15").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
@@ -5769,25 +5815,19 @@
         state.pointing.el = initTarget.elDeg;
         syncGimbalSlidersFromPointing();
       }
-      // Start Live Sensor by default (and unlock iOS DeviceOrientationEvent permission on first screen touch if required by WebKit)
+      // Start Live Sensor by default (and unlock iOS DeviceOrientationEvent permission on first user click/tap as required by WebKit)
       activateOrientationListeners();
       if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
-        const unlockIosOrientationOnFirstTap = () => {
-          if (!state.pointing.compassActive) return;
-          DeviceOrientationEvent.requestPermission()
-            .then((perm) => {
-              if (perm === "granted") {
-                state.pointing.pendingMagSync = true;
-                window.addEventListener("deviceorientation", handleDeviceOrientation, true);
-                updateCompassUiStatus();
-              }
-            })
-            .catch(() => {});
-          window.removeEventListener("touchend", unlockIosOrientationOnFirstTap, true);
-          window.removeEventListener("click", unlockIosOrientationOnFirstTap, true);
+        const unlockIosOrientationOnTap = () => {
+          if (state.pointing.sensorEventsReceiving || !state.pointing.compassActive) {
+            if (state.pointing.sensorEventsReceiving) {
+              window.removeEventListener("click", unlockIosOrientationOnTap, true);
+            }
+            return;
+          }
+          requestAndAttachOrientationStream(false);
         };
-        window.addEventListener("touchend", unlockIosOrientationOnFirstTap, true);
-        window.addEventListener("click", unlockIosOrientationOnFirstTap, true);
+        window.addEventListener("click", unlockIosOrientationOnTap, true);
       }
       updateCompassUiStatus();
       if (animFrameId) cancelAnimationFrame(animFrameId);
