@@ -273,6 +273,15 @@
     <div class="hud-glass flex-1 min-h-0 rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl flex flex-col relative">
       <div id="viewportContainer" class="relative flex-1 min-h-0 w-full h-full bg-[#03060c] select-none touch-none overflow-hidden" style="min-height: 160px; flex: 1 1 0%;">
         <canvas id="orbitalCanvas" class="absolute inset-0 w-full h-full block cursor-crosshair" style="width: 100%; height: 100%; display: block;"></canvas>
+        <button id="iosAutoStartSensorOverlay" type="button" onclick="unlockSensorFromStartupOverlay()" class="hidden absolute inset-0 z-20 w-full h-full bg-slate-950/55 backdrop-blur-sm flex flex-col items-center justify-center gap-2 p-4 text-center cursor-pointer">
+          <span class="px-4 py-2.5 rounded-2xl bg-cyan-500 text-slate-950 font-mono-tech font-bold text-xs sm:text-sm shadow-lg flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            Tap Anywhere to Start Live Sky Compass
+          </span>
+          <span class="text-[11px] font-mono-tech text-cyan-200">Unlocks iPhone Motion &amp; Orientation on Open</span>
+        </button>
       </div>
       <!-- Ultra-compact single-line guide status strip at bottom edge of sky display -->
       <div class="px-2.5 py-1 bg-slate-900/95 border-t border-slate-800/90 flex items-center justify-between gap-2 font-mono-tech text-[10px] shrink-0">
@@ -3547,6 +3556,16 @@
     // =========================================================================
     // 6. SMARTPHONE COMPASS / GYROSCOPE & GPS INTEGRATION
     // =========================================================================
+    function hideIosSensorOverlay() {
+      const ov = document.getElementById("iosAutoStartSensorOverlay");
+      if (ov) ov.classList.add("hidden");
+    }
+
+    function unlockSensorFromStartupOverlay() {
+      hideIosSensorOverlay();
+      requestAndAttachOrientationStream(true);
+    }
+
     function requestAndAttachOrientationStream(showFeedback = true) {
       state.pointing.compassActive = true;
       state.pointing.autoTrackNorad = null;
@@ -3563,7 +3582,7 @@
         DeviceOrientationEvent.requestPermission()
           .then((permissionState) => {
             if (permissionState === "granted") {
-              // Remove any pre-permission listener first so iOS WebKit registers a fresh permitted listener
+              hideIosSensorOverlay();
               window.removeEventListener("deviceorientation", handleDeviceOrientation, true);
               window.removeEventListener("deviceorientation", handleDeviceOrientation, false);
               window.addEventListener("deviceorientation", handleDeviceOrientation, true);
@@ -3572,13 +3591,14 @@
                 showToast("Live Sensor active! Startup Mag Compass locked to steady Accel/Gyro.");
               }
             } else if (showFeedback) {
+              hideIosSensorOverlay();
               state.pointing.compassActive = false;
               updateCompassUiStatus();
               showToast("Compass permission declined; use touch drag or gimbal sliders.");
             }
           })
           .catch(() => {
-            // Permission call requires a direct user tap gesture on iOS Safari; wait for next click/tap
+            // iOS WebKit blocked non-gesture startup call; show 1-tap full-screen overlay button if events aren't flowing yet
             updateCompassUiStatus();
           });
       } else {
@@ -3746,12 +3766,19 @@
       state.pointing.pendingMagSync = true;
       state.pointing.magCompassSynced = false;
       document.getElementById("btnUnlockTrack").classList.add("hidden");
-      // On non-iOS or already-permitted contexts, attach listener; on iOS, wait for requestPermission() so WebKit does not blacklist the listener
+      // Attach immediately on open in case permission is already active in this WebKit session, AND call requestAndAttachOrientationStream
+      window.addEventListener("deviceorientation", handleDeviceOrientation, true);
       if (typeof DeviceOrientationEvent === "undefined" || typeof DeviceOrientationEvent.requestPermission !== "function") {
         window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
-        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
       } else {
         requestAndAttachOrientationStream(false);
+        // If iOS WebKit requires a button gesture on cold open, show the 1-tap startup overlay right on the Sky Display after 220ms
+        setTimeout(() => {
+          if (state.pointing.compassActive && !state.pointing.sensorEventsReceiving) {
+            const ov = document.getElementById("iosAutoStartSensorOverlay");
+            if (ov) ov.classList.remove("hidden");
+          }
+        }, 220);
       }
       updateCompassUiStatus();
     }
@@ -3759,7 +3786,10 @@
     function handleDeviceOrientation(event) {
       if (!state.pointing.compassActive) return;
       if (typeof event.alpha === "number" || typeof event.beta === "number" || typeof event.webkitCompassHeading === "number") {
-        state.pointing.sensorEventsReceiving = true;
+        if (!state.pointing.sensorEventsReceiving) {
+          state.pointing.sensorEventsReceiving = true;
+          hideIosSensorOverlay();
+        }
       }
       const alpha = typeof event.alpha === "number" && event.alpha !== null ? event.alpha : 0;
       const beta = typeof event.beta === "number" && event.beta !== null ? event.beta : 90;
@@ -5773,7 +5803,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v15").then(function (cache) {
+        caches.open("orbitalscope-pwa-v16").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
