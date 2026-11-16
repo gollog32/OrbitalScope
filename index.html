@@ -299,61 +299,71 @@
       </div>
     </div>
 
-    <!-- 2. CENTER CURSOR INFORMATION BOX (Always on First Screen Without Scrolling) -->
-    <div id="cursorInfoBox" class="hud-glass-active shrink-0 rounded-2xl p-2 sm:p-2.5 transition-all">
-      <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-cyan-500/20 pb-1.5">
-        <div class="flex items-center gap-1.5 min-w-0">
+    <!-- 2. CENTER CURSOR INFORMATION BOX (4 Full-Width Readable Rows on First Screen Without Scrolling) -->
+    <div id="cursorInfoBox" class="hud-glass-active shrink-0 rounded-2xl p-2 sm:p-2.5 transition-all overflow-hidden">
+      <div class="flex items-center justify-between gap-1.5 border-b border-cyan-500/20 pb-1">
+        <div class="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
           <div id="cursorStatusIndicator" class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] shrink-0"></div>
           <h2 id="infoSatName" class="text-xs sm:text-sm font-bold text-white tracking-tight truncate">ISS (ZARYA)</h2>
           <span id="infoNoradBadge" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-tech text-[10px] border border-slate-700 shrink-0">NORAD 25544</span>
           <span id="infoCosparBadge" class="hidden sm:inline-block px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300 font-mono-tech text-[10px] shrink-0">1998-067A</span>
-          <span id="infoOrbitBadge" class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono-tech text-[10px] font-semibold border border-emerald-500/30 shrink-0">LEO &middot; Space Stations</span>
         </div>
         <div class="flex items-center gap-1.5 shrink-0">
-          <span id="cursorLockBadge" class="hidden sm:inline-block px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
-            TARGET IN CURSOR
+          <span id="cursorLockBadge" class="px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
+            IN CURSOR
           </span>
-          <span id="cursorAngularOffset" class="text-[10px] font-mono-tech text-slate-300">&Delta;&theta;: 0.0&deg;</span>
+          <span id="cursorAngularOffset" class="text-[10px] font-mono-tech text-amber-300 font-semibold">&Delta;&theta;: 0.0&deg;</span>
           <button id="btnLockCursorTarget" type="button" onclick="toggleLockCurrentCursorTarget()" class="px-2 py-0.5 rounded-lg text-[10px] font-mono-tech font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition">
             Lock Cursor Target
           </button>
         </div>
       </div>
 
-      <div id="cursorTargetDetails" class="mt-1.5">
-        <div class="flex items-center justify-between gap-2 text-[10px] text-slate-300 mb-1.5">
-          <p id="infoOperatorLine" class="truncate">
-            Operator: <span class="text-white font-medium">NASA / Multinational (CIS)</span> &middot; Launched: <span class="text-white font-mono-tech">1998-11-20</span>
-          </p>
-          <a id="infoSourceLink" href="https://orbitalradar.com/satellite/25544" target="_blank" rel="noopener noreferrer" class="font-mono-tech text-cyan-300 hover:text-cyan-200 underline flex items-center gap-0.5 shrink-0">
-            <span>Verified Record</span>
+      <div id="cursorTargetDetails" class="mt-1">
+        <div class="flex items-center justify-between gap-2 text-[10px] text-slate-300 mb-1 overflow-hidden">
+          <div class="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+            <span id="infoOrbitBadge" class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono-tech text-[9px] font-semibold border border-emerald-500/30 shrink-0">LEO &middot; Space Stations</span>
+            <p id="infoOperatorLine" class="truncate text-[10px] text-slate-300">
+              NASA / Multinational (CIS) &middot; 1998-11-20
+            </p>
+          </div>
+          <a id="infoSourceLink" href="https://orbitalradar.com/satellite/25544" target="_blank" rel="noopener noreferrer" class="font-mono-tech text-[10px] text-cyan-300 hover:text-cyan-200 underline flex items-center gap-0.5 shrink-0">
+            <span>Record</span>
             <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
           </a>
         </div>
 
-        <!-- Compact 4-Column Live Telemetry Grid -->
-        <div class="grid grid-cols-4 gap-1.5 font-mono-tech">
-          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
-            <div class="text-[9px] text-slate-400 uppercase">Look Az / El</div>
-            <div id="infoLookAngles" class="text-[11px] sm:text-xs font-bold text-cyan-300 truncate">180.0&deg; / +42.0&deg;</div>
-            <div id="infoHorizonState" class="text-[9px] text-emerald-400 truncate">Above Horizon</div>
+        <!-- 4 Full-Width Horizontal Rows of Telemetry Data -->
+        <div class="flex flex-col gap-1 font-mono-tech text-[11px]">
+          <div class="bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center justify-between gap-2 overflow-hidden">
+            <span class="text-[9px] text-slate-400 uppercase font-semibold shrink-0">Look Az / El</span>
+            <div class="flex items-center justify-end gap-2 min-w-0 truncate">
+              <span id="infoLookAngles" class="font-bold text-cyan-300 truncate">180.0&deg; / +42.0&deg;</span>
+              <span id="infoHorizonState" class="text-[10px] text-emerald-400 shrink-0">Above Horizon</span>
+            </div>
           </div>
-          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
-            <div class="text-[9px] text-slate-400 uppercase">Pos / Coords</div>
-            <div id="infoLatLon" class="text-[11px] sm:text-xs font-bold text-white truncate">28.57&deg;N, 80.65&deg;W</div>
-            <div id="infoSlantRange" class="text-[9px] text-slate-400 truncate">Range: 612 km</div>
+          <div class="bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center justify-between gap-2 overflow-hidden">
+            <span class="text-[9px] text-slate-400 uppercase font-semibold shrink-0">Pos / Coords</span>
+            <div class="flex items-center justify-end gap-2 min-w-0 truncate">
+              <span id="infoLatLon" class="font-bold text-white truncate">28.57&deg;N, 80.65&deg;W</span>
+              <span id="infoSlantRange" class="text-[10px] text-slate-300 truncate">Range: 612 km</span>
+            </div>
           </div>
-          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
-            <div class="text-[9px] text-slate-400 uppercase">Alt &amp; Speed</div>
-            <div id="infoAltSpeed" class="text-[11px] sm:text-xs font-bold text-sky-300 truncate">419 km &middot; 7.66 km/s</div>
-            <div id="infoPerigeeApogee" class="text-[9px] text-slate-400 truncate">414 &times; 424 km</div>
+          <div class="bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center justify-between gap-2 overflow-hidden">
+            <span class="text-[9px] text-slate-400 uppercase font-semibold shrink-0">Alt &amp; Speed</span>
+            <div class="flex items-center justify-end gap-2 min-w-0 truncate">
+              <span id="infoAltSpeed" class="font-bold text-sky-300 truncate">419 km &middot; 7.66 km/s</span>
+              <span id="infoPerigeeApogee" class="text-[10px] text-slate-300 truncate">414 &times; 424 km</span>
+            </div>
           </div>
-          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
-            <div class="text-[9px] text-slate-400 uppercase">Inc / Period</div>
-            <div id="infoIncPeriod" class="text-[11px] sm:text-xs font-bold text-amber-300 truncate">51.63&deg; &middot; 92.95m</div>
-            <div id="infoRevsDay" class="text-[9px] text-slate-400 truncate">15.49 revs/day</div>
+          <div class="bg-slate-900/90 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center justify-between gap-2 overflow-hidden">
+            <span class="text-[9px] text-slate-400 uppercase font-semibold shrink-0">Inc / Period</span>
+            <div class="flex items-center justify-end gap-2 min-w-0 truncate">
+              <span id="infoIncPeriod" class="font-bold text-amber-300 truncate">51.63&deg; &middot; 92.95m</span>
+              <span id="infoRevsDay" class="text-[10px] text-slate-300 truncate">15.49 revs/day</span>
+            </div>
           </div>
         </div>
       </div>
@@ -4128,10 +4138,21 @@
       syncGimbalSlidersFromPointing();
     }
 
+    function getArrowOrNearestTarget() {
+      if (state.guideTargetNorad) {
+        const guided =
+          state.livePositions.find((s) => s.noradId === state.guideTargetNorad) ||
+          state.swarmPositions.find((s) => s.noradId === state.guideTargetNorad);
+        if (guided) return guided;
+      }
+      return state.nearestSatellite || null;
+    }
+
     function snapToNearestSatellite() {
-      if (state.nearestSatellite) {
-        pointCursorAtSatellite(state.nearestSatellite.noradId, false);
-        showToast(`Centered cursor on ${state.nearestSatellite.name} (free to pan/tilt)`);
+      const ref = getArrowOrNearestTarget();
+      if (ref) {
+        pointCursorAtSatellite(ref.noradId, false);
+        showToast(`Centered cursor on ${ref.name} (free to pan/tilt)`);
       }
     }
 
@@ -4148,9 +4169,12 @@
       } else if (state.cursorTarget) {
         pointCursorAtSatellite(state.cursorTarget.noradId, true);
         showToast(`Tracking locked onto ${state.cursorTarget.name}`);
-      } else if (state.nearestSatellite) {
-        pointCursorAtSatellite(state.nearestSatellite.noradId, true);
-        showToast(`Snapped & locked onto ${state.nearestSatellite.name}`);
+      } else {
+        const ref = getArrowOrNearestTarget();
+        if (ref) {
+          pointCursorAtSatellite(ref.noradId, true);
+          showToast(`Snapped & locked onto ${ref.name}`);
+        }
       }
     }
 
@@ -4465,88 +4489,110 @@
       updateCursorInformationBox();
     }
 
+    function populateObjectTelemetryRows(obj) {
+      if (!obj) {
+        document.getElementById("infoLatLon").textContent = `${state.observer.lat.toFixed(2)}\u00b0N, ${Math.abs(state.observer.lon).toFixed(2)}\u00b0W`;
+        document.getElementById("infoSlantRange").textContent = "\u2014";
+        document.getElementById("infoAltSpeed").textContent = "\u2014";
+        document.getElementById("infoPerigeeApogee").textContent = "\u2014";
+        document.getElementById("infoIncPeriod").textContent = "\u2014";
+        document.getElementById("infoRevsDay").textContent = "\u2014";
+        return;
+      }
+      if (obj.isCelestial) {
+        document.getElementById("infoLatLon").textContent = `RA ${obj.raText}`;
+        document.getElementById("infoSlantRange").textContent = `Dec ${obj.decText} (${obj.constellation})`;
+        document.getElementById("infoAltSpeed").textContent = obj.distanceDisplay;
+        document.getElementById("infoPerigeeApogee").textContent = `${obj.speedKms} km/s (${obj.speedKmh.toLocaleString()} km/h)`;
+        document.getElementById("infoIncPeriod").textContent = `${obj.periodMin}`;
+        document.getElementById("infoRevsDay").textContent = `${obj.revsPerDay}`;
+      } else {
+        const ns = obj.latDeg >= 0 ? "N" : "S";
+        const ew = obj.lonDeg >= 0 ? "E" : "W";
+        document.getElementById("infoLatLon").textContent = `${Math.abs(obj.latDeg).toFixed(2)}\u00b0${ns}, ${Math.abs(obj.lonDeg).toFixed(2)}\u00b0${ew}`;
+        document.getElementById("infoSlantRange").textContent = `Range: ${Math.round(obj.slantRangeKm).toLocaleString()} km`;
+        document.getElementById("infoAltSpeed").textContent = `${Math.round(obj.altKm).toLocaleString()} km \u00b7 ${obj.speedKms} km/s`;
+        document.getElementById("infoPerigeeApogee").textContent = `${obj.perigeeKm.toLocaleString()} \u00d7 ${obj.apogeeKm.toLocaleString()} km`;
+        document.getElementById("infoIncPeriod").textContent = `${obj.inclinationDeg}\u00b0 \u00b7 ${obj.periodMin} min`;
+        document.getElementById("infoRevsDay").textContent = `${obj.revsPerDay} revs/day`;
+      }
+    }
+
     function updateCursorInformationBox() {
       const target = state.cursorTarget;
+      const arrowObj = getArrowOrNearestTarget();
       const indicator = document.getElementById("cursorStatusIndicator");
       const badge = document.getElementById("cursorLockBadge");
       const offsetEl = document.getElementById("cursorAngularOffset");
       const lockBtn = document.getElementById("btnLockCursorTarget");
+      const horizonEl = document.getElementById("infoHorizonState");
+      const srcLink = document.getElementById("infoSourceLink");
 
       if (target) {
-        indicator.className = "w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_12px_#34d399]";
-        badge.className = "px-2 py-0.5 rounded-md text-[10px] font-mono-tech font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40";
-        badge.textContent = state.pointing.autoTrackNorad === target.noradId ? "LOCKED IN CURSOR" : "INSIDE CURSOR";
-        offsetEl.textContent = `\u0394\u03b8: ${target.cursorAngleDeg.toFixed(2)}\u00b0 from center`;
+        indicator.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399] shrink-0";
+        badge.className = "px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40";
+        badge.textContent = state.pointing.autoTrackNorad === target.noradId ? "LOCKED" : "IN CURSOR";
+        offsetEl.textContent = `\u0394\u03b8 ${target.cursorAngleDeg.toFixed(1)}\u00b0`;
         lockBtn.textContent = state.pointing.autoTrackNorad === target.noradId ? "Unlock Target" : "Lock Cursor Target";
 
         document.getElementById("infoSatName").textContent = target.name;
-        document.getElementById("infoNoradBadge").textContent = `NORAD ${target.noradId}`;
+        document.getElementById("infoNoradBadge").textContent = `#${target.noradId}`;
         document.getElementById("infoCosparBadge").textContent = target.cosparId;
         document.getElementById("infoOrbitBadge").textContent = `${target.orbitClass} \u00b7 ${target.category}`;
         document.getElementById("infoOperatorLine").innerHTML =
-          `Operator: <span class="text-white font-medium">${target.operator}</span> \u00b7 Launched: <span class="text-white font-mono-tech">${target.launchDate}</span>`;
+          `<span class="text-white font-medium">${target.operator}</span> \u00b7 ${target.launchDate}`;
 
-        const srcLink = document.getElementById("infoSourceLink");
         srcLink.href = target.sourceUrl;
         srcLink.classList.remove("hidden");
 
         const elSign = target.elDeg >= 0 ? "+" : "";
-        document.getElementById("infoLookAngles").textContent = `${target.azDeg.toFixed(1)}\u00b0 (${cardinalFromAzimuth(target.azDeg)}) / ${elSign}${target.elDeg.toFixed(1)}\u00b0`;
-        const horizonEl = document.getElementById("infoHorizonState");
+        document.getElementById("infoLookAngles").textContent = `Az ${target.azDeg.toFixed(1)}\u00b0 (${cardinalFromAzimuth(target.azDeg)}) \u00b7 El ${elSign}${target.elDeg.toFixed(1)}\u00b0`;
         if (target.aboveHorizon) {
-          horizonEl.className = "text-[10px] text-emerald-400 mt-0.5";
-          horizonEl.textContent = "Above Local Horizon (Line-of-Sight)";
+          horizonEl.className = "text-[10px] text-emerald-400 shrink-0";
+          horizonEl.textContent = "Above Horizon";
         } else {
-          horizonEl.className = "text-[10px] text-amber-300 mt-0.5";
-          horizonEl.textContent = "Below Local Horizon (Earth-Shadowed)";
+          horizonEl.className = "text-[10px] text-amber-300 shrink-0";
+          horizonEl.textContent = "Below Horizon";
         }
 
-        if (target.isCelestial) {
-          document.getElementById("infoLatLon").textContent = `RA ${target.raText}`;
-          document.getElementById("infoSlantRange").textContent = `Dec ${target.decText} (${target.constellation})`;
-          document.getElementById("infoAltSpeed").textContent = target.distanceDisplay;
-          document.getElementById("infoPerigeeApogee").textContent = `Speed: ${target.speedKms} km/s (${target.speedKmh.toLocaleString()} km/h)`;
-          document.getElementById("infoIncPeriod").textContent = `${target.periodMin}`;
-          document.getElementById("infoRevsDay").textContent = `${target.revsPerDay}`;
-        } else {
-          const ns = target.latDeg >= 0 ? "N" : "S";
-          const ew = target.lonDeg >= 0 ? "E" : "W";
-          document.getElementById("infoLatLon").textContent = `${Math.abs(target.latDeg).toFixed(2)}\u00b0${ns}, ${Math.abs(target.lonDeg).toFixed(2)}\u00b0${ew}`;
-          document.getElementById("infoSlantRange").textContent = `Slant Range: ${Math.round(target.slantRangeKm).toLocaleString()} km`;
-          document.getElementById("infoAltSpeed").textContent = `${Math.round(target.altKm).toLocaleString()} km \u00b7 ${target.speedKms} km/s`;
-          document.getElementById("infoPerigeeApogee").textContent = `${target.perigeeKm.toLocaleString()} \u00d7 ${target.apogeeKm.toLocaleString()} km (${target.speedKmh.toLocaleString()} km/h)`;
-          document.getElementById("infoIncPeriod").textContent = `${target.inclinationDeg}\u00b0 \u00b7 ${target.periodMin} min`;
-          document.getElementById("infoRevsDay").textContent = `${target.revsPerDay} revs/day`;
-        }
+        populateObjectTelemetryRows(target);
       } else {
-        // Empty sky inside cursor \u2014 show exact celestial pointing coordinates + nearest tracked satellite
-        indicator.className = "w-3 h-3 rounded-full bg-slate-500";
-        badge.className = "px-2 py-0.5 rounded-md text-[10px] font-mono-tech font-semibold bg-slate-800 text-slate-300 border border-slate-700";
-        badge.textContent = "SCANNING SKY SECTOR";
-        const nearest = state.nearestSatellite;
-        offsetEl.textContent = nearest
-          ? `Nearest: ${nearest.name} (${nearest.cursorAngleDeg.toFixed(1)}\u00b0 away)`
-          : "Drag or tilt to scan";
+        // No object inside the center circle: show data for the exact object that the Guide / Nearest Arrow points to!
+        indicator.className = "w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24] shrink-0";
+        badge.className = "px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-amber-500/20 text-amber-200 border border-amber-400/40";
+        badge.textContent = state.guideTargetNorad ? "GUIDE TARGET" : "NEAREST";
+
+        const angDist = arrowObj
+          ? angularDistanceAzEl(state.pointing.az, state.pointing.el, arrowObj.azDeg, arrowObj.elDeg)
+          : 0;
+        offsetEl.textContent = arrowObj ? `${angDist.toFixed(1)}\u00b0 away` : "\u2014";
         lockBtn.textContent = "Snap to Nearest";
 
         const elSign = state.pointing.el >= 0 ? "+" : "";
-        document.getElementById("infoSatName").textContent = `Open Sky Sector (${cardinalFromAzimuth(state.pointing.az)} ${state.pointing.az.toFixed(1)}\u00b0, El ${elSign}${state.pointing.el.toFixed(1)}\u00b0)`;
-        document.getElementById("infoNoradBadge").textContent = `Aperture \u00b1${state.pointing.cursorRadiusDeg}\u00b0`;
-        document.getElementById("infoCosparBadge").textContent = state.pointing.el >= 0 ? "Upper Hemisphere" : "Nadir Hemisphere";
-        document.getElementById("infoOrbitBadge").textContent = nearest ? `Nearest: #${nearest.noradId}` : "No Lock";
-        document.getElementById("infoOperatorLine").innerHTML = nearest
-          ? `Closest object to center cursor: <span class="text-cyan-300 font-semibold">${nearest.name}</span> at <span class="text-white font-mono-tech">${nearest.cursorAngleDeg.toFixed(1)}\u00b0</span> angular separation \u2014 tap <button type="button" onclick="snapToNearestSatellite()" class="underline text-cyan-300 font-semibold">Snap Nearest</button> to center it.`
-          : "Steer the center cursor over any tracked satellite to inspect live telemetry.";
+        if (arrowObj) {
+          document.getElementById("infoSatName").textContent = arrowObj.name;
+          document.getElementById("infoNoradBadge").textContent = `#${arrowObj.noradId}`;
+          document.getElementById("infoCosparBadge").textContent = arrowObj.cosparId;
+          document.getElementById("infoOrbitBadge").textContent = `${arrowObj.orbitClass} \u00b7 ${arrowObj.category}`;
+          const objElSign = arrowObj.elDeg >= 0 ? "+" : "";
+          document.getElementById("infoOperatorLine").innerHTML =
+            `At Az <span class="text-amber-300 font-mono-tech">${arrowObj.azDeg.toFixed(1)}\u00b0</span> / El <span class="text-amber-300 font-mono-tech">${objElSign}${arrowObj.elDeg.toFixed(1)}\u00b0</span> \u00b7 ${arrowObj.operator}`;
+          srcLink.href = arrowObj.sourceUrl;
+          srcLink.classList.remove("hidden");
+        } else {
+          document.getElementById("infoSatName").textContent = `Open Sky (${cardinalFromAzimuth(state.pointing.az)} ${state.pointing.az.toFixed(1)}\u00b0)`;
+          document.getElementById("infoNoradBadge").textContent = `\u00b1${state.pointing.cursorRadiusDeg}\u00b0`;
+          document.getElementById("infoCosparBadge").textContent = "\u2014";
+          document.getElementById("infoOrbitBadge").textContent = "Scanning";
+          document.getElementById("infoOperatorLine").textContent = "Steer cursor over any object to inspect telemetry.";
+          srcLink.classList.add("hidden");
+        }
 
-        document.getElementById("infoSourceLink").classList.add("hidden");
-        document.getElementById("infoLookAngles").textContent = `${state.pointing.az.toFixed(1)}\u00b0 / ${elSign}${state.pointing.el.toFixed(1)}\u00b0`;
-        document.getElementById("infoHorizonState").textContent = state.pointing.el >= 0 ? "Pointing Above Horizon" : "Pointing Below Horizon";
-        document.getElementById("infoLatLon").textContent = `${state.observer.lat.toFixed(2)}\u00b0N, ${Math.abs(state.observer.lon).toFixed(2)}\u00b0W`;
-        document.getElementById("infoSlantRange").textContent = nearest ? `Nearest Range: ${Math.round(nearest.slantRangeKm).toLocaleString()} km` : "\u2014";
-        document.getElementById("infoAltSpeed").textContent = "32,124 Tracked Objects";
-        document.getElementById("infoPerigeeApogee").textContent = "17,740 LEO \u00b7 592 MEO";
-        document.getElementById("infoIncPeriod").textContent = nearest ? `Nearest Inc: ${nearest.inclinationDeg}\u00b0` : "\u2014";
-        document.getElementById("infoRevsDay").textContent = "Real-time SGP4 active";
+        document.getElementById("infoLookAngles").textContent = `Cursor Az ${state.pointing.az.toFixed(1)}\u00b0 (${cardinalFromAzimuth(state.pointing.az)}) \u00b7 El ${elSign}${state.pointing.el.toFixed(1)}\u00b0`;
+        horizonEl.className = state.pointing.el >= 0 ? "text-[10px] text-emerald-400 shrink-0" : "text-[10px] text-amber-300 shrink-0";
+        horizonEl.textContent = state.pointing.el >= 0 ? "Above Horizon" : "Below Horizon";
+
+        populateObjectTelemetryRows(arrowObj);
       }
 
       const currentNorad = target ? target.noradId : null;
@@ -4724,7 +4770,7 @@
 
       // Draw Orbit Path for active / cursor satellite
       if (state.filters.showOrbits) {
-        const orbitTarget = state.cursorTarget || state.nearestSatellite;
+        const orbitTarget = state.cursorTarget || getArrowOrNearestTarget();
         if (orbitTarget) {
           const track = computeOrbitTrack(orbitTarget, state.time.simTimeMs, state.observer, 64);
           ctx.beginPath();
@@ -5046,11 +5092,11 @@
       ctx.fill();
 
       // Draw Search / Target Directional Guide Arrow on Sky Map
-      const activeGuideSat =
-        (state.guideTargetNorad &&
-          (state.livePositions.find((s) => s.noradId === state.guideTargetNorad) ||
-            state.swarmPositions.find((s) => s.noradId === state.guideTargetNorad))) ||
-        (!hasLock ? state.nearestSatellite : null);
+      const activeGuideSat = !hasLock ? getArrowOrNearestTarget() : (
+        state.guideTargetNorad && state.guideTargetNorad !== state.cursorTarget.noradId
+          ? getArrowOrNearestTarget()
+          : null
+      );
 
       const guideBanner = document.getElementById("guideStatusBanner");
       if (activeGuideSat) {
@@ -5336,7 +5382,7 @@
 
       // Orbit Track for selected / cursor satellite
       if (state.filters.showOrbits) {
-        const orbitTarget = state.cursorTarget || state.nearestSatellite;
+        const orbitTarget = state.cursorTarget || getArrowOrNearestTarget();
         if (orbitTarget) {
           const track = computeOrbitTrack(orbitTarget, state.time.simTimeMs, state.observer, 72);
           ctx.beginPath();
@@ -5803,7 +5849,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v16").then(function (cache) {
+        caches.open("orbitalscope-pwa-v17").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });

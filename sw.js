@@ -1,4 +1,4 @@
-const CACHE_NAME = "orbitalscope-pwa-v16";
+const CACHE_NAME = "orbitalscope-pwa-v17";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
