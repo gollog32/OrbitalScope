@@ -69,7 +69,9 @@
     }
     /* Offline Fallback Stylesheet (when Tailwind CDN is unreachable offline) */
     *, *::before, *::after { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background-color: #050811; color: #f1f5f9; }
+    html, body { margin: 0; height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; display: flex; flex-direction: column; background-color: #050811; color: #f1f5f9; }
+    .min-h-0 { min-height: 0; }
+    .shrink-0 { flex-shrink: 0; }
     .hidden { display: none !important; }
     .block { display: block; }
     .flex { display: flex; }
@@ -197,354 +199,265 @@
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col bg-[#050811] text-slate-100">
+<body class="h-full overflow-hidden flex flex-col bg-[#050811] text-slate-100 select-none">
 
-  <!-- Top Smartphone App Status & Telemetry Header -->
-  <header class="hud-glass sticky top-0 z-30 px-3 py-2.5 border-b border-cyan-500/20">
-    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-      <!-- Brand + Live Catalog Counter -->
-      <div class="flex items-center gap-2.5">
-        <div class="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shadow-inner">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 0v20m10-10H2m15.07-7.07l-14.14 14.14M19.07 19.07L4.93 4.93" />
+  <!-- ZERO-SCROLL TOP BAR: Upper-Left Menu Button | Center Telemetry | Upper-Right Realign Mag Button -->
+  <header class="hud-glass shrink-0 z-30 px-2.5 py-1.5 border-b border-cyan-500/25">
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-1.5">
+      <!-- Upper-Left: Menu Button -->
+      <div class="flex items-center gap-2">
+        <button id="btnOpenLeftMenu" type="button" onclick="toggleLeftMenu()" class="px-2.5 py-1.5 rounded-xl text-xs font-mono-tech font-semibold bg-slate-900 hover:bg-slate-800 border border-cyan-400/40 text-cyan-200 flex items-center gap-1.5 shadow transition" title="Open Menu (Search, Show/Hide Items &amp; Settings)">
+          <svg class="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
+          <span>Menu</span>
+        </button>
+        <div class="hidden sm:flex items-center gap-1.5">
+          <h1 class="text-xs sm:text-sm font-bold tracking-tight text-white">OrbitalScope</h1>
         </div>
+      </div>
+
+      <!-- Center: Compact Live Az / El / FOV Readout -->
+      <div class="flex items-center gap-2 font-mono-tech text-[11px] bg-slate-900/90 px-2.5 py-1 rounded-xl border border-slate-800">
+        <span id="pointingModeTag" class="hidden md:inline-block px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 text-[9px] font-semibold">LIVE SENSOR</span>
         <div>
-          <div class="flex items-center gap-2">
-            <h1 class="text-sm sm:text-base font-bold tracking-tight text-white">OrbitalScope</h1>
-            <span id="liveFeedBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono-tech font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-              LIVE SGP4
-            </span>
-          </div>
-          <p class="text-[11px] text-slate-400 font-mono-tech">
-            Catalog: <span class="text-cyan-300 font-semibold">32,124</span> Tracked (<span class="text-sky-300">17,740</span> LEO &middot; <span class="text-indigo-300">592</span> MEO)
-          </p>
+          <span class="text-slate-400">AZ</span>
+          <span id="hudAzimuth" class="font-bold text-white">180.0&deg;</span>
+          <span id="hudCardinal" class="font-semibold text-cyan-300">S</span>
+        </div>
+        <span class="text-slate-600">|</span>
+        <div>
+          <span class="text-slate-400">EL</span>
+          <span id="hudElevation" class="font-bold text-white">+42.0&deg;</span>
+        </div>
+        <span class="text-slate-600">|</span>
+        <div>
+          <span class="text-slate-400">FOV</span>
+          <span id="hudFov" class="font-semibold text-slate-200">65&deg;</span>
         </div>
       </div>
 
-      <!-- View Mode Switcher (Sky Compass AR vs 3D Earth Globe vs Split) -->
-      <div class="flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-700/70">
-        <button id="btnViewSky" type="button" onclick="setViewMode('sky')" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all bg-cyan-500 text-slate-950 font-semibold shadow">
-          Sky Pointer
-        </button>
-        <button id="btnViewGlobe" type="button" onclick="setViewMode('globe')" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-slate-300 hover:text-white">
-          3D Earth
-        </button>
-        <button id="btnViewSplit" type="button" onclick="setViewMode('split')" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-slate-300 hover:text-white">
-          Dual View
-        </button>
-      </div>
-
-      <!-- Sensor & GPS Quick Action Pills -->
+      <!-- Upper-Right: Realign Mag Button -->
       <div class="flex items-center gap-1.5">
-        <button id="btnGpsToggle" type="button" onclick="openGpsModal()" class="px-2.5 py-1.5 rounded-xl text-xs font-mono-tech bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/30 text-cyan-200 flex items-center gap-1.5 transition" title="Configure GPS Observer Location">
-          <span id="gpsStatusDot" class="w-2 h-2 rounded-full bg-cyan-400"></span>
-          <span id="gpsHeaderLabel">Kennedy Space Ctr (28.57&deg;N)</span>
+        <button id="btnClearGuide" type="button" onclick="clearGuideTarget()" class="hidden bg-amber-500/20 hover:bg-amber-500/30 px-2 py-1 rounded-lg text-[10px] font-mono-tech text-amber-200 border border-amber-400/50 transition">
+          Clear Guide Arrow
         </button>
-        <button id="btnCompassSensor" type="button" onclick="toggleCompassSensors()" class="px-2.5 py-1.5 rounded-xl text-xs font-mono-tech bg-slate-900/90 hover:bg-slate-800 border border-amber-400/40 text-amber-200 flex items-center gap-1.5 transition" title="Enable Smartphone Compass &amp; Gyroscope Orientation">
-          <svg class="w-3.5 h-3.5 text-amber-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+        <button id="btnUnlockTrack" type="button" onclick="clearAutoTrack()" class="hidden bg-emerald-500/20 hover:bg-emerald-500/30 px-2 py-1 rounded-lg text-[10px] font-mono-tech text-emerald-200 border border-emerald-400/50 transition">
+          Unlock Track
+        </button>
+        <button id="btnRealignMag" type="button" onclick="realignMagCompass()" class="px-2.5 py-1.5 rounded-xl text-xs font-mono-tech font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/50 flex items-center gap-1 shadow transition" title="Take a fresh Magnetic Compass read and lock back to steady Accel/Gyro">
+          <svg class="w-3.5 h-3.5 text-cyan-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          <span id="compassSensorLabel">Compass: Manual/Touch</span>
-        </button>
-        <button id="btnFetchCelestrak" type="button" onclick="fetchLiveCelestrak()" class="px-2.5 py-1.5 rounded-xl text-xs font-mono-tech bg-slate-900/90 hover:bg-slate-800 border border-emerald-500/30 text-emerald-300 flex items-center gap-1 transition" title="Sync Live CelesTrak GP JSON &amp; Save Offline Cache">
-          <span>Sync CelesTrak</span>
+          <span>Realign Mag</span>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Responsive Smartphone + Tablet/Desktop Layout -->
-  <main class="flex-1 max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-3 p-2.5 sm:p-3">
+  <!-- FIRST SCREEN MAIN WORKSPACE: Zero-Scroll Flex Column containing Sky Display + Information Box (+ Optional Gimbal Box) -->
+  <main class="flex-1 min-h-0 max-w-7xl w-full mx-auto flex flex-col gap-1.5 p-1.5 sm:p-2 overflow-hidden">
 
-    <!-- Left / Top Column: Interactive Viewport with Center Cursor + Live Orientation Bar (7 cols on lg) -->
-    <section class="lg:col-span-7 flex flex-col gap-2.5">
-
-      <!-- Real-Time Viewport Wrapper (Dedicated Header & Footer Bars so Zero Boxes Overlap the Sky Display) -->
-      <div class="hud-glass rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl flex flex-col">
-        <!-- Non-Overlapping Top Telemetry & Action Bar -->
-        <div class="px-3 py-2 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap items-center gap-2.5 font-mono-tech">
-            <span id="pointingModeTag" class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 text-[10px] font-semibold">TOUCH / GIMBAL</span>
-            <div class="text-xs">
-              <span class="text-slate-400">AZ:</span>
-              <span id="hudAzimuth" class="font-bold text-white">180.0&deg;</span>
-              <span id="hudCardinal" class="font-semibold text-cyan-300">S</span>
-            </div>
-            <div class="text-xs">
-              <span class="text-slate-400">EL:</span>
-              <span id="hudElevation" class="font-bold text-white">+42.0&deg;</span>
-            </div>
-            <div class="text-xs">
-              <span class="text-slate-400">FOV:</span>
-              <span id="hudFov" class="font-semibold text-slate-200">65&deg;</span>
-            </div>
-            <div id="hudSubPointRow" class="text-[10px] text-slate-400 hidden sm:block">
-              (<span id="hudObsCoords" class="text-slate-300">28.5729&deg;N, 80.6490&deg;W (3m)</span>)
-            </div>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-1.5 font-mono-tech">
-            <select id="cursorRadiusSelect" onchange="updateCursorAperture(this.value)" aria-label="Cursor Capture Aperture" class="bg-slate-800 text-cyan-300 border border-slate-700 rounded-lg px-2 py-1 text-[11px] focus:outline-none">
-              <option value="4">&plusmn;4&deg; Tight</option>
-              <option value="6" selected>&plusmn;6&deg; Standard</option>
-              <option value="10">&plusmn;10&deg; Wide</option>
-            </select>
-            <button type="button" onclick="snapToNearestSatellite()" class="bg-slate-800 hover:bg-cyan-500/20 px-2.5 py-1 rounded-lg text-[11px] text-cyan-300 border border-cyan-500/30 flex items-center gap-1 transition">
-              <span>Snap Nearest</span>
-            </button>
-            <button id="btnRealignMag" type="button" onclick="realignMagCompass()" class="bg-cyan-500/20 hover:bg-cyan-500/30 px-2.5 py-1 rounded-lg text-[11px] text-cyan-200 border border-cyan-400/40 flex items-center gap-1 transition" title="Take a single fresh Magnetic Compass reading to correct accelerometer/gyro drift, then lock back to steady accel/gyro">
-              <span>Realign Mag</span>
-            </button>
-            <button id="btnSightAlign" type="button" onclick="calibrateCompassToTarget()" class="bg-amber-500/20 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg text-[11px] text-amber-200 border border-amber-400/40 flex items-center gap-1 transition" title="Point phone at the real Moon, Saturn, or active target in the sky and tap to calibrate compass &amp; pitch offset">
-              <span>1-Tap Sight Align</span>
-            </button>
-            <button id="btnResetAlign" type="button" onclick="resetCompassCalibration()" class="hidden bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded-lg text-[10px] text-slate-300 border border-slate-700 transition" title="Reset compass sight-alignment trim to 0">
-              <span>Reset Align</span>
-            </button>
-            <button id="btnClearGuide" type="button" onclick="clearGuideTarget()" class="hidden bg-amber-500/20 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg text-[11px] text-amber-200 border border-amber-400/50 transition">
-              Clear Guide Arrow
-            </button>
-            <button id="btnUnlockTrack" type="button" onclick="clearAutoTrack()" class="hidden bg-emerald-500/20 hover:bg-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] text-emerald-200 border border-emerald-400/50 transition">
-              Unlock Track
-            </button>
-          </div>
+    <!-- 1. SKY DISPLAY / 3D GLOBE VIEWPORT (Fills available height dynamically) -->
+    <div class="hud-glass flex-1 min-h-0 rounded-2xl overflow-hidden border border-cyan-500/30 shadow-2xl flex flex-col relative">
+      <div id="viewportContainer" class="relative flex-1 min-h-0 w-full bg-[#03060c] select-none touch-none" style="min-height: 180px;">
+        <canvas id="orbitalCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+      </div>
+      <!-- Ultra-compact single-line guide status strip at bottom edge of sky display -->
+      <div class="px-2.5 py-1 bg-slate-900/95 border-t border-slate-800/90 flex items-center justify-between gap-2 font-mono-tech text-[10px] shrink-0">
+        <div id="guideStatusBanner" class="text-amber-300 font-semibold truncate">
+          Default Sky: Common Stars, 5 Largest Black Holes + Sgr A*, Planets, Galaxies, Comets &amp; Deep Space
         </div>
-
-        <!-- Unobstructed Sky / Globe Canvas -->
-        <div id="viewportContainer" class="relative w-full h-[380px] sm:h-[450px] bg-[#03060c] select-none touch-none">
-          <canvas id="orbitalCanvas" class="w-full h-full block cursor-crosshair"></canvas>
-        </div>
-
-        <!-- Non-Overlapping Bottom Display & Zoom Bar -->
-        <div class="px-3 py-2 bg-slate-900/95 border-t border-slate-800 flex flex-col gap-1.5 font-mono-tech text-[11px]">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex flex-wrap items-center gap-2.5">
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowStars" type="checkbox" checked onchange="toggleDisplayOption('stars', this.checked)" class="rounded text-sky-300 focus:ring-0" />
-                <span class="text-sky-200">Common Stars</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowAllStars" type="checkbox" onchange="toggleDisplayOption('allstars', this.checked)" class="rounded text-indigo-300 focus:ring-0" />
-                <span class="text-indigo-200">All 1000 Stars</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowBlackHoles" type="checkbox" checked onchange="toggleDisplayOption('blackholes', this.checked)" class="rounded text-orange-400 focus:ring-0" />
-                <span class="text-orange-300">Top BHs + Sgr A*</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowAllBlackHoles" type="checkbox" onchange="toggleDisplayOption('allblackholes', this.checked)" class="rounded text-amber-500 focus:ring-0" />
-                <span class="text-amber-300">All 100 BHs</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowPlanets" type="checkbox" checked onchange="toggleDisplayOption('planets', this.checked)" class="rounded text-amber-400 focus:ring-0" />
-                <span class="text-amber-200">Planets</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowGalaxies" type="checkbox" checked onchange="toggleDisplayOption('galaxies', this.checked)" class="rounded text-purple-400 focus:ring-0" />
-                <span class="text-purple-200">Galaxies</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowComets" type="checkbox" checked onchange="toggleDisplayOption('comets', this.checked)" class="rounded text-teal-400 focus:ring-0" />
-                <span class="text-teal-200">Comets</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowDeepSpace" type="checkbox" checked onchange="toggleDisplayOption('deepspace', this.checked)" class="rounded text-rose-400 focus:ring-0" />
-                <span class="text-rose-200">Deep Space</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer" title="Earth satellites are hidden by default; check to display Earth-orbiting satellites">
-                <input id="chkShowSatellites" type="checkbox" onchange="toggleDisplayOption('satellites', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
-                <span class="text-cyan-200">Earth Sats</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer" title="Starlink satellites are hidden by default; check to display Starlink constellation">
-                <input id="chkShowStarlink" type="checkbox" onchange="toggleDisplayOption('starlink', this.checked)" class="rounded text-sky-400 focus:ring-0" />
-                <span class="text-sky-300">Starlink</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowOrbits" type="checkbox" checked onchange="toggleDisplayOption('orbits', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
-                <span class="text-slate-200">Orbit Paths</span>
-              </label>
-              <label class="flex items-center gap-1 cursor-pointer">
-                <input id="chkShowSwarm" type="checkbox" onchange="toggleDisplayOption('swarm', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
-                <span class="text-slate-400">32k Swarm Layer</span>
-              </label>
-            </div>
-
-            <button id="btnDefaultZoom" type="button" onclick="resetDefaultFov()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-semibold transition" title="Reset Field of View to Default 65 deg (Pinch Viewport to Zoom)">
-              Default Zoom
-            </button>
-          </div>
-
-          <div id="guideStatusBanner" class="text-[11px] text-amber-300 font-semibold">
-            Default Sky: Common Stars, 5 Largest Black Holes + Sgr A*, Planets, Galaxies, Comets &amp; Deep Space
-          </div>
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" onclick="snapToNearestSatellite()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition">
+            Snap Nearest
+          </button>
+          <button id="btnDefaultZoom" type="button" onclick="resetDefaultFov()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition" title="Reset Field of View to Default 65 deg">
+            Default Zoom
+          </button>
         </div>
       </div>
+    </div>
 
-      <!-- CENTER CURSOR INFORMATION BOX (Real-Time Target Inspector inside the Center Reticle) -->
-      <div id="cursorInfoBox" class="hud-glass-active rounded-2xl p-3.5 sm:p-4 transition-all">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-cyan-500/25 pb-2.5">
-          <div class="flex items-center gap-2">
-            <div id="cursorStatusIndicator" class="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_10px_#22d3ee]"></div>
-            <span class="text-[11px] font-mono-tech uppercase tracking-wider text-cyan-300 font-semibold">
-              Center Cursor Reticle Readout
-            </span>
-            <span id="cursorLockBadge" class="px-2 py-0.5 rounded-md text-[10px] font-mono-tech font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
-              TARGET IN CURSOR
-            </span>
-          </div>
-          <div class="flex items-center gap-2">
-            <span id="cursorAngularOffset" class="text-[11px] font-mono-tech text-slate-300">&Delta;&theta;: 0.0&deg; from center</span>
-            <button id="btnLockCursorTarget" type="button" onclick="toggleLockCurrentCursorTarget()" class="px-2.5 py-1 rounded-lg text-[11px] font-mono-tech font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition">
-              Lock Cursor Target
-            </button>
-          </div>
+    <!-- 2. CENTER CURSOR INFORMATION BOX (Always on First Screen Without Scrolling) -->
+    <div id="cursorInfoBox" class="hud-glass-active shrink-0 rounded-2xl p-2 sm:p-2.5 transition-all">
+      <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-cyan-500/20 pb-1.5">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <div id="cursorStatusIndicator" class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] shrink-0"></div>
+          <h2 id="infoSatName" class="text-xs sm:text-sm font-bold text-white tracking-tight truncate">ISS (ZARYA)</h2>
+          <span id="infoNoradBadge" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-tech text-[10px] border border-slate-700 shrink-0">NORAD 25544</span>
+          <span id="infoCosparBadge" class="hidden sm:inline-block px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300 font-mono-tech text-[10px] shrink-0">1998-067A</span>
+          <span id="infoOrbitBadge" class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono-tech text-[10px] font-semibold border border-emerald-500/30 shrink-0">LEO &middot; Space Stations</span>
         </div>
-
-        <!-- Dynamic Content populated at 60 FPS for whatever is inside the Center Cursor -->
-        <div id="cursorTargetDetails" class="mt-3">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <div class="flex items-center gap-2 flex-wrap">
-                <h2 id="infoSatName" class="text-base sm:text-lg font-bold text-white tracking-tight">ISS (ZARYA)</h2>
-                <span id="infoNoradBadge" class="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-tech text-xs border border-slate-700">NORAD 25544</span>
-                <span id="infoCosparBadge" class="px-2 py-0.5 rounded bg-slate-800/80 text-slate-300 font-mono-tech text-xs">1998-067A</span>
-                <span id="infoOrbitBadge" class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono-tech text-xs font-semibold border border-emerald-500/30">LEO &middot; Space Stations</span>
-              </div>
-              <p id="infoOperatorLine" class="text-xs text-slate-300 mt-1">
-                Operator: <span class="text-white font-medium">NASA / Multinational (CIS)</span> &middot; Launched: <span class="text-white font-mono-tech">1998-11-20</span>
-              </p>
-            </div>
-            <a id="infoSourceLink" href="https://orbitalradar.com/satellite/25544" target="_blank" rel="noopener noreferrer" class="text-xs font-mono-tech text-cyan-300 hover:text-cyan-200 underline flex items-center gap-1">
-              <span>Verified Orbital Record</span>
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          </div>
-
-          <!-- 4-Card Live Telemetry Grid inside Info Box -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 font-mono-tech">
-            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-              <div class="text-[10px] text-slate-400 uppercase">Look Az / El</div>
-              <div id="infoLookAngles" class="text-xs sm:text-sm font-bold text-cyan-300 mt-0.5">180.0&deg; / +42.0&deg;</div>
-              <div id="infoHorizonState" class="text-[10px] text-emerald-400 mt-0.5">Above Horizon (Visible)</div>
-            </div>
-            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-              <div class="text-[10px] text-slate-400 uppercase">Sub-Sat Lat / Lon</div>
-              <div id="infoLatLon" class="text-xs sm:text-sm font-bold text-white mt-0.5">28.57&deg;N, 80.65&deg;W</div>
-              <div id="infoSlantRange" class="text-[10px] text-slate-400 mt-0.5">Range: 612 km</div>
-            </div>
-            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-              <div class="text-[10px] text-slate-400 uppercase">Altitude &amp; Speed</div>
-              <div id="infoAltSpeed" class="text-xs sm:text-sm font-bold text-sky-300 mt-0.5">419 km &middot; 7.66 km/s</div>
-              <div id="infoPerigeeApogee" class="text-[10px] text-slate-400 mt-0.5">414 &times; 424 km (27,583 km/h)</div>
-            </div>
-            <div class="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-              <div class="text-[10px] text-slate-400 uppercase">Inclination / Period</div>
-              <div id="infoIncPeriod" class="text-xs sm:text-sm font-bold text-amber-300 mt-0.5">51.63&deg; &middot; 92.95m</div>
-              <div id="infoRevsDay" class="text-[10px] text-slate-400 mt-0.5">15.4915 revs/day</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Smartphone Compass & Gimbal Pointing Bar (Steer Phone Azimuth / Elevation or Time Warp) -->
-      <div class="hud-glass rounded-2xl p-3 flex flex-col gap-2.5">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-            Smartphone Compass &amp; Attitude Gimbal
+        <div class="flex items-center gap-1.5 shrink-0">
+          <span id="cursorLockBadge" class="hidden sm:inline-block px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
+            TARGET IN CURSOR
           </span>
-          <div class="flex items-center gap-1.5 font-mono-tech text-[11px]">
-            <button type="button" onclick="setCardinalPointing(0, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">N</button>
-            <button type="button" onclick="setCardinalPointing(90, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">E</button>
-            <button type="button" onclick="setCardinalPointing(180, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">S</button>
-            <button type="button" onclick="setCardinalPointing(270, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">W</button>
-            <button type="button" onclick="setCardinalPointing(180, 90)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300">Zenith (90&deg;)</button>
-          </div>
+          <span id="cursorAngularOffset" class="text-[10px] font-mono-tech text-slate-300">&Delta;&theta;: 0.0&deg;</span>
+          <button id="btnLockCursorTarget" type="button" onclick="toggleLockCurrentCursorTarget()" class="px-2 py-0.5 rounded-lg text-[10px] font-mono-tech font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition">
+            Lock Cursor Target
+          </button>
+        </div>
+      </div>
+
+      <div id="cursorTargetDetails" class="mt-1.5">
+        <div class="flex items-center justify-between gap-2 text-[10px] text-slate-300 mb-1.5">
+          <p id="infoOperatorLine" class="truncate">
+            Operator: <span class="text-white font-medium">NASA / Multinational (CIS)</span> &middot; Launched: <span class="text-white font-mono-tech">1998-11-20</span>
+          </p>
+          <a id="infoSourceLink" href="https://orbitalradar.com/satellite/25544" target="_blank" rel="noopener noreferrer" class="font-mono-tech text-cyan-300 hover:text-cyan-200 underline flex items-center gap-0.5 shrink-0">
+            <span>Verified Record</span>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center font-mono-tech text-xs">
-          <div>
-            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
-              <label for="sliderAzimuth">Compass Azimuth (0&deg;&ndash;360&deg;)</label>
-              <span id="labelSliderAz" class="text-cyan-300 font-semibold">180.0&deg;</span>
-            </div>
-            <input id="sliderAzimuth" type="range" min="0" max="360" step="0.5" value="180" oninput="onGimbalSliderChange()" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+        <!-- Compact 4-Column Live Telemetry Grid -->
+        <div class="grid grid-cols-4 gap-1.5 font-mono-tech">
+          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
+            <div class="text-[9px] text-slate-400 uppercase">Look Az / El</div>
+            <div id="infoLookAngles" class="text-[11px] sm:text-xs font-bold text-cyan-300 truncate">180.0&deg; / +42.0&deg;</div>
+            <div id="infoHorizonState" class="text-[9px] text-emerald-400 truncate">Above Horizon</div>
           </div>
-          <div>
-            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
-              <label for="sliderElevation">Phone Pitch / Elevation (-90&deg;&ndash;90&deg;)</label>
-              <span id="labelSliderEl" class="text-cyan-300 font-semibold">+42.0&deg;</span>
-            </div>
-            <input id="sliderElevation" type="range" min="-90" max="90" step="0.5" value="42" oninput="onGimbalSliderChange()" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
+            <div class="text-[9px] text-slate-400 uppercase">Pos / Coords</div>
+            <div id="infoLatLon" class="text-[11px] sm:text-xs font-bold text-white truncate">28.57&deg;N, 80.65&deg;W</div>
+            <div id="infoSlantRange" class="text-[9px] text-slate-400 truncate">Range: 612 km</div>
           </div>
-          <div>
-            <div class="flex justify-between text-[11px] text-slate-400 mb-1">
-              <label for="selectTimeWarp">Propagation Rate</label>
-              <button type="button" onclick="resetSimTimeNow()" class="text-[10px] text-cyan-400 hover:underline">Reset Live UTC</button>
-            </div>
-            <select id="selectTimeWarp" onchange="setTimeWarp(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-100 focus:outline-none">
-              <option value="1" selected>1&times; Real-Time SGP4</option>
-              <option value="10">10&times; Fast Orbit</option>
-              <option value="60">60&times; (1 min / sec)</option>
-              <option value="300">300&times; (5 min / sec)</option>
-              <option value="0">Paused</option>
-            </select>
+          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
+            <div class="text-[9px] text-slate-400 uppercase">Alt &amp; Speed</div>
+            <div id="infoAltSpeed" class="text-[11px] sm:text-xs font-bold text-sky-300 truncate">419 km &middot; 7.66 km/s</div>
+            <div id="infoPerigeeApogee" class="text-[9px] text-slate-400 truncate">414 &times; 424 km</div>
           </div>
-        </div>
-
-        <!-- Compass Declination & 1-Tap Sight Alignment Trim Controls -->
-        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80 font-mono-tech text-[11px]">
-          <div class="flex flex-wrap items-center gap-2">
-            <label class="flex items-center gap-1.5 cursor-pointer text-slate-300" title="Apply NOAA WMM magnetic declination offset from Magnetic North to True North">
-              <input id="chkMagDeclination" type="checkbox" checked onchange="toggleMagDeclination(this.checked)" class="rounded text-cyan-400 focus:ring-0" />
-              <span id="magDeclinationLabel">WMM Mag Declination: Auto</span>
-            </label>
-            <span id="compassTrimBadge" class="px-2 py-0.5 rounded bg-slate-900 text-amber-300 border border-slate-800">
-              Sight Trim: 0.0&deg; Az / 0.0&deg; El
-            </span>
-          </div>
-          <div class="flex items-center gap-1">
-            <button type="button" onclick="nudgeCompassTrim(-2, 0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Azimuth -2 deg">&minus;2&deg; Az</button>
-            <button type="button" onclick="nudgeCompassTrim(2, 0)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Azimuth +2 deg">+2&deg; Az</button>
-            <button type="button" onclick="nudgeCompassTrim(0, -2)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Elevation -2 deg">&minus;2&deg; El</button>
-            <button type="button" onclick="nudgeCompassTrim(0, 2)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200" title="Nudge Elevation +2 deg">+2&deg; El</button>
+          <div class="bg-slate-900/90 px-2 py-1 rounded-xl border border-slate-800">
+            <div class="text-[9px] text-slate-400 uppercase">Inc / Period</div>
+            <div id="infoIncPeriod" class="text-[11px] sm:text-xs font-bold text-amber-300 truncate">51.63&deg; &middot; 92.95m</div>
+            <div id="infoRevsDay" class="text-[9px] text-slate-400 truncate">15.49 revs/day</div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- Right / Bottom Column: Real-Time Search, Category Filters, Tracked Satellite Directory & Constellation Counts (5 cols on lg) -->
-    <aside class="lg:col-span-5 flex flex-col gap-2.5">
+    <!-- 3. SMARTPHONE COMPASS & ATTITUDE GIMBAL INFO BOX (Show/Hide Option in Menu; Hidden by Default for Zero Scroll) -->
+    <div id="gimbalInfoBox" class="hidden hud-glass shrink-0 rounded-2xl p-2.5 flex flex-col gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-1.5">
+        <span class="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+          </svg>
+          Smartphone Compass &amp; Attitude Gimbal
+        </span>
+        <div class="flex items-center gap-1 font-mono-tech text-[10px]">
+          <button type="button" onclick="setCardinalPointing(0, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">N</button>
+          <button type="button" onclick="setCardinalPointing(90, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">E</button>
+          <button type="button" onclick="setCardinalPointing(180, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">S</button>
+          <button type="button" onclick="setCardinalPointing(270, 45)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300">W</button>
+          <button type="button" onclick="setCardinalPointing(180, 90)" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-300">Zenith (90&deg;)</button>
+        </div>
+      </div>
 
-      <!-- Search & Filter Panel -->
-      <div class="hud-glass rounded-2xl p-3.5 flex flex-col gap-3">
+      <div class="grid grid-cols-3 gap-2 items-center font-mono-tech text-[11px]">
+        <div>
+          <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
+            <label for="sliderAzimuth">Azimuth</label>
+            <span id="labelSliderAz" class="text-cyan-300 font-semibold">180.0&deg;</span>
+          </div>
+          <input id="sliderAzimuth" type="range" min="0" max="360" step="0.5" value="180" oninput="onGimbalSliderChange()" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
+            <label for="sliderElevation">Pitch / El</label>
+            <span id="labelSliderEl" class="text-cyan-300 font-semibold">+42.0&deg;</span>
+          </div>
+          <input id="sliderElevation" type="range" min="-90" max="90" step="0.5" value="42" oninput="onGimbalSliderChange()" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+        </div>
+        <div>
+          <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
+            <label for="selectTimeWarp">Rate</label>
+            <button type="button" onclick="resetSimTimeNow()" class="text-[9px] text-cyan-400 hover:underline">Reset Live UTC</button>
+          </div>
+          <select id="selectTimeWarp" onchange="setTimeWarp(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-1.5 py-0.5 text-[10px] text-slate-100 focus:outline-none">
+            <option value="1" selected>1&times; Real-Time SGP4</option>
+            <option value="10">10&times; Fast Orbit</option>
+            <option value="60">60&times; (1 min / sec)</option>
+            <option value="300">300&times; (5 min / sec)</option>
+            <option value="0">Paused</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-slate-800/80 font-mono-tech text-[10px]">
+        <div class="flex flex-wrap items-center gap-2">
+          <label class="flex items-center gap-1 cursor-pointer text-slate-300">
+            <input id="chkMagDeclination" type="checkbox" checked onchange="toggleMagDeclination(this.checked)" class="rounded text-cyan-400 focus:ring-0" />
+            <span id="magDeclinationLabel">WMM Mag Decl: Auto</span>
+          </label>
+          <span id="compassTrimBadge" class="px-1.5 py-0.5 rounded bg-slate-900 text-amber-300 border border-slate-800">
+            Sight Trim: 0.0&deg; Az / 0.0&deg; El
+          </span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button type="button" onclick="nudgeCompassTrim(-2, 0)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">&minus;2&deg; Az</button>
+          <button type="button" onclick="nudgeCompassTrim(2, 0)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+2&deg; Az</button>
+          <button type="button" onclick="nudgeCompassTrim(0, -2)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">&minus;2&deg; El</button>
+          <button type="button" onclick="nudgeCompassTrim(0, 2)" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200">+2&deg; El</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- UPPER-LEFT MENU DRAWER (Contains: 1. Search at Top, 2. Show/Hide Items + Gimbal Toggle, 3. All Other Selections) -->
+  <div id="leftMenuModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex justify-start">
+    <aside class="hud-glass-active w-full max-w-md h-full overflow-y-auto p-3.5 flex flex-col gap-3 border-r border-cyan-400/40 shadow-2xl">
+      <!-- Menu Header -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-lg bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 0v20m10-10H2" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm font-bold text-white">OrbitalScope Menu</span>
+              <span id="liveFeedBadge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono-tech font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                LIVE SGP4
+              </span>
+            </div>
+            <div id="hudSubPointRow" class="text-[10px] text-slate-400 font-mono-tech">
+              Obs: <span id="hudObsCoords" class="text-slate-300">28.5729&deg;N, 80.6490&deg;W (3m)</span>
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick="closeLeftMenu()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono-tech text-xs">
+          &#10005; Close
+        </button>
+      </div>
+
+      <!-- SECTION 1 (TOP OF MENU): SEARCH & TARGET DIRECTORY -->
+      <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 flex flex-col gap-2.5">
         <div class="flex items-center justify-between">
-          <h2 class="text-sm font-bold text-white flex items-center gap-1.5">
-            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 103.5 10.5a7.5 7.5 0 0013.15 6.15z" />
             </svg>
-            Search Tracked Satellites
+            Search Tracked Satellites &amp; Sky Objects
           </h2>
-          <span id="searchCountBadge" class="text-[11px] font-mono-tech text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
+          <span id="searchCountBadge" class="text-[10px] font-mono-tech text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-full border border-cyan-500/20">
             16 Verified + Swarm
           </span>
         </div>
 
-        <!-- Search Input Box -->
         <div class="relative">
           <input
             id="satSearchInput"
             type="text"
             oninput="onSearchInput(this.value)"
-            placeholder="Search 1000 stars, TON 618, Sgr A*, M87*, ISS, planets, galaxies..."
+            placeholder="Search 1000 stars, TON 618, Sgr A*, M87*, ISS, planets..."
             aria-label="Search satellites by name, NORAD ID, COSPAR ID, or operator"
-            class="w-full bg-slate-900/95 border border-slate-700 focus:border-cyan-400 rounded-xl pl-9 pr-20 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none font-mono-tech"
+            class="w-full bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-xl pl-9 pr-16 py-2 text-xs text-white placeholder-slate-500 focus:outline-none font-mono-tech"
           />
           <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 103.5 10.5a7.5 7.5 0 0013.15 6.15z" />
@@ -597,74 +510,186 @@
           </button>
         </div>
 
-        <!-- Above Horizon Filter Toggle -->
-        <div class="flex items-center justify-between text-xs font-mono-tech bg-slate-900/70 px-3 py-1.5 rounded-xl border border-slate-800/80">
-          <label class="flex items-center gap-2 cursor-pointer">
+        <div class="flex items-center justify-between text-[11px] font-mono-tech bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+          <label class="flex items-center gap-1.5 cursor-pointer">
             <input id="chkAboveHorizon" type="checkbox" onchange="toggleAboveHorizonFilter(this.checked)" class="rounded text-cyan-400 focus:ring-0" />
-            <span class="text-slate-300">Show only satellites above local horizon (El &gt; 0&deg;)</span>
+            <span class="text-slate-300">Above local horizon only (El &gt; 0&deg;)</span>
           </label>
           <span id="visibleAboveCount" class="text-emerald-400 font-semibold">8 visible</span>
         </div>
 
-        <!-- Live Search Results & Point-to-Target List -->
-        <div id="satelliteListContainer" class="flex flex-col gap-2 max-h-[340px] overflow-y-auto pr-1">
+        <div id="satelliteListContainer" class="flex flex-col gap-1.5 max-h-[210px] overflow-y-auto pr-1">
           <!-- Populated dynamically by renderSatelliteList() -->
         </div>
       </div>
 
-      <!-- Global Tracked Constellation Breakdown Card (Grounded in Orbital Radar 2026 Data) -->
-      <div class="hud-glass rounded-2xl p-3.5 flex flex-col gap-2.5">
+      <!-- SECTION 2 (UNDER SEARCH): SHOW / HIDE ITEMS (Including Smartphone Compass & Attitude Gimbal Info Box) -->
+      <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 flex flex-col gap-2">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-300">Show / Hide Sky &amp; HUD Items</h3>
+        <div class="grid grid-cols-2 gap-2 font-mono-tech text-[11px]">
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowStars" type="checkbox" checked onchange="toggleDisplayOption('stars', this.checked)" class="rounded text-sky-300 focus:ring-0" />
+            <span class="text-sky-200">Common Stars</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowAllStars" type="checkbox" onchange="toggleDisplayOption('allstars', this.checked)" class="rounded text-indigo-300 focus:ring-0" />
+            <span class="text-indigo-200">All 1000 Stars</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowBlackHoles" type="checkbox" checked onchange="toggleDisplayOption('blackholes', this.checked)" class="rounded text-orange-400 focus:ring-0" />
+            <span class="text-orange-300">Top BHs + Sgr A*</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowAllBlackHoles" type="checkbox" onchange="toggleDisplayOption('allblackholes', this.checked)" class="rounded text-amber-500 focus:ring-0" />
+            <span class="text-amber-300">All 100 BHs</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowPlanets" type="checkbox" checked onchange="toggleDisplayOption('planets', this.checked)" class="rounded text-amber-400 focus:ring-0" />
+            <span class="text-amber-200">Planets</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowGalaxies" type="checkbox" checked onchange="toggleDisplayOption('galaxies', this.checked)" class="rounded text-purple-400 focus:ring-0" />
+            <span class="text-purple-200">Galaxies</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowComets" type="checkbox" checked onchange="toggleDisplayOption('comets', this.checked)" class="rounded text-teal-400 focus:ring-0" />
+            <span class="text-teal-200">Comets</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowDeepSpace" type="checkbox" checked onchange="toggleDisplayOption('deepspace', this.checked)" class="rounded text-rose-400 focus:ring-0" />
+            <span class="text-rose-200">Deep Space</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowSatellites" type="checkbox" onchange="toggleDisplayOption('satellites', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
+            <span class="text-cyan-200">Earth Sats</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowStarlink" type="checkbox" onchange="toggleDisplayOption('starlink', this.checked)" class="rounded text-sky-400 focus:ring-0" />
+            <span class="text-sky-300">Starlink</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowOrbits" type="checkbox" checked onchange="toggleDisplayOption('orbits', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
+            <span class="text-slate-200">Orbit Paths</span>
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
+            <input id="chkShowSwarm" type="checkbox" onchange="toggleDisplayOption('swarm', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
+            <span class="text-slate-400">32k Swarm Layer</span>
+          </label>
+          <label class="col-span-2 flex items-center gap-2 cursor-pointer bg-cyan-950/40 px-2.5 py-2 rounded-xl border border-cyan-500/30">
+            <input id="chkShowGimbalBox" type="checkbox" onchange="toggleDisplayOption('gimbalbox', this.checked)" class="rounded text-cyan-400 focus:ring-0" />
+            <span class="text-cyan-200 font-semibold">Show Smartphone Compass &amp; Attitude Gimbal Box</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- SECTION 3: ALL OTHER SELECTIONS (View Mode, Sensors, GPS, CelesTrak Sync & Constellations) -->
+      <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 flex flex-col gap-2.5">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-300">View Mode, Sensors &amp; Calibration</h3>
+
+        <!-- View Mode Switcher -->
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <button id="btnViewSky" type="button" onclick="setViewMode('sky')" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all bg-cyan-500 text-slate-950 font-semibold shadow">
+              Sky Pointer
+            </button>
+            <button id="btnViewGlobe" type="button" onclick="setViewMode('globe')" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-slate-300 hover:text-white">
+              3D Earth
+            </button>
+            <button id="btnViewSplit" type="button" onclick="setViewMode('split')" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all text-slate-300 hover:text-white">
+              Dual View
+            </button>
+          </div>
+
+          <select id="cursorRadiusSelect" onchange="updateCursorAperture(this.value)" aria-label="Cursor Capture Aperture" class="bg-slate-950 text-cyan-300 border border-slate-800 rounded-xl px-2 py-1.5 text-[11px] font-mono-tech focus:outline-none">
+            <option value="4">&plusmn;4&deg; Tight</option>
+            <option value="6" selected>&plusmn;6&deg; Standard</option>
+            <option value="10">&plusmn;10&deg; Wide</option>
+          </select>
+        </div>
+
+        <!-- Sensor, Sight Align, GPS & CelesTrak Buttons -->
+        <div class="grid grid-cols-2 gap-1.5 font-mono-tech text-xs">
+          <button id="btnCompassSensor" type="button" onclick="toggleCompassSensors()" class="px-2.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-amber-400/40 text-amber-200 flex items-center justify-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5 text-amber-300 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+            <span id="compassSensorLabel" class="truncate">Compass: LIVE SENSOR</span>
+          </button>
+
+          <button id="btnGpsToggle" type="button" onclick="openGpsModal()" class="px-2.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-cyan-500/30 text-cyan-200 flex items-center justify-center gap-1.5 transition">
+            <span id="gpsStatusDot" class="w-2 h-2 rounded-full bg-cyan-400 shrink-0"></span>
+            <span id="gpsHeaderLabel" class="truncate">Kennedy Space Ctr (28.57&deg;N)</span>
+          </button>
+
+          <button id="btnSightAlign" type="button" onclick="calibrateCompassToTarget()" class="px-2.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/40 flex items-center justify-center gap-1 transition">
+            <span>1-Tap Sight Align</span>
+          </button>
+
+          <button id="btnFetchCelestrak" type="button" onclick="fetchLiveCelestrak()" class="px-2.5 py-2 rounded-xl bg-slate-950 hover:bg-slate-800 border border-emerald-500/30 text-emerald-300 flex items-center justify-center gap-1 transition">
+            <span>Sync CelesTrak</span>
+          </button>
+
+          <button id="btnResetAlign" type="button" onclick="resetCompassCalibration()" class="hidden col-span-2 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700 transition">
+            <span>Reset Align</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- SECTION 4: GLOBAL TRACKED CONSTELLATIONS -->
+      <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 flex flex-col gap-2">
         <div class="flex items-center justify-between">
           <div>
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">Global Tracked Constellations</h3>
-            <p class="text-[11px] text-slate-400">32,124 total objects tracked &middot; Tap a constellation to highlight swarm</p>
+            <p class="text-[10px] text-slate-400">Tap a constellation to highlight swarm</p>
           </div>
           <a href="https://orbitalradar.com/satellite-directory/orbit/meo" target="_blank" rel="noopener noreferrer" class="text-[10px] font-mono-tech text-cyan-400 hover:underline">
             Orbital Radar &#8599;
           </a>
         </div>
 
-        <div id="constellationSwarmGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 font-mono-tech text-[11px]">
-          <button type="button" onclick="filterSwarmConstellation('ALL')" id="swarmBtn_ALL" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-left transition">
+        <div id="constellationSwarmGrid" class="grid grid-cols-3 gap-1.5 font-mono-tech text-[10px]">
+          <button type="button" onclick="filterSwarmConstellation('ALL')" id="swarmBtn_ALL" class="swarm-btn px-2 py-1.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-left transition">
             <div class="text-cyan-300 font-bold">All Swarm</div>
-            <div class="text-[10px] text-slate-300">32,124 tracked</div>
+            <div class="text-[9px] text-slate-300">32,124 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('Starlink')" id="swarmBtn_Starlink" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('Starlink')" id="swarmBtn_Starlink" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-sky-300 font-bold">Starlink</div>
-            <div class="text-[10px] text-slate-400">11,202 active</div>
+            <div class="text-[9px] text-slate-400">11,202 active</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('Cosmos')" id="swarmBtn_Cosmos" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('Cosmos')" id="swarmBtn_Cosmos" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-rose-300 font-bold">Cosmos</div>
-            <div class="text-[10px] text-slate-400">2,823 tracked</div>
+            <div class="text-[9px] text-slate-400">2,823 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('Fengyun')" id="swarmBtn_Fengyun" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('Fengyun')" id="swarmBtn_Fengyun" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-amber-300 font-bold">Fengyun</div>
-            <div class="text-[10px] text-slate-400">1,970 tracked</div>
+            <div class="text-[9px] text-slate-400">1,970 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('OneWeb')" id="swarmBtn_OneWeb" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('OneWeb')" id="swarmBtn_OneWeb" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-indigo-300 font-bold">OneWeb</div>
-            <div class="text-[10px] text-slate-400">654 tracked</div>
+            <div class="text-[9px] text-slate-400">654 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('Kuiper')" id="swarmBtn_Kuiper" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('Kuiper')" id="swarmBtn_Kuiper" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-emerald-300 font-bold">Kuiper</div>
-            <div class="text-[10px] text-slate-400">392 tracked</div>
+            <div class="text-[9px] text-slate-400">392 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('Iridium')" id="swarmBtn_Iridium" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('Iridium')" id="swarmBtn_Iridium" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-purple-300 font-bold">Iridium</div>
-            <div class="text-[10px] text-slate-400">216 tracked</div>
+            <div class="text-[9px] text-slate-400">216 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('GPS')" id="swarmBtn_GPS" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('GPS')" id="swarmBtn_GPS" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-yellow-300 font-bold">GPS / Navstar</div>
-            <div class="text-[10px] text-slate-400">73 tracked</div>
+            <div class="text-[9px] text-slate-400">73 tracked</div>
           </button>
-          <button type="button" onclick="filterSwarmConstellation('Galileo')" id="swarmBtn_Galileo" class="swarm-btn px-2.5 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-left transition">
+          <button type="button" onclick="filterSwarmConstellation('Galileo')" id="swarmBtn_Galileo" class="swarm-btn px-2 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 text-left transition">
             <div class="text-teal-300 font-bold">Galileo</div>
-            <div class="text-[10px] text-slate-400">33 tracked</div>
+            <div class="text-[9px] text-slate-400">33 tracked</div>
           </button>
         </div>
       </div>
     </aside>
-  </main>
+    <!-- Clickable backdrop area to close menu -->
+    <div class="flex-1 h-full" onclick="closeLeftMenu()"></div>
+  </div>
 
   <!-- GPS & Observer Location Configuration Modal -->
   <div id="gpsModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
@@ -2603,7 +2628,7 @@
         el: 32.0,
         fov: 65.0,
         cursorRadiusDeg: 6.0,
-        compassActive: false,
+        compassActive: true,
         autoTrackNorad: null,
         camVec: [0, 1, 0],
         rawSensorAz: 147.9,
@@ -2641,7 +2666,8 @@
         showComets: true,
         showDeepSpace: true,
         showSatellites: false,
-        showStarlink: false
+        showStarlink: false,
+        showGimbalBox: false
       },
       livePositions: [],
       swarmPositions: [],
@@ -3702,15 +3728,25 @@
       const gamma = typeof event.gamma === "number" && event.gamma !== null ? event.gamma : 0;
 
       // 1. One-shot Magnetic Compass Read at Startup (or when user taps "Realign Mag"):
-      // Never continuously blend webkitCompassHeading after startup so magnetometer jitter cannot cause the view to wobble or wander!
+      // Why Realign Mag previously failed above the horizon:
+      // At the horizon (beta = 90 deg), cos(beta) flips sign from >0 (below horizon, +Y top edge leans forward)
+      // to <0 (above horizon, +Y top edge leans backward 180 deg opposite the back camera!).
+      // Previously the threshold was |beta| > 135 instead of |beta| > 90, leaving all normal sky elevations (+1 to +45 deg, beta 91..135) inverted by 180 deg!
       const unrolledGyroYaw = normalizeAngle360(360.0 - alpha);
-      if (state.pointing.pendingMagSync && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
+      const isAboveHorizonPosture = Math.abs(beta) > 90;
+      const nearHorizonSingularity = Math.abs(Math.abs(beta) - 90) < 4.5;
+      if (state.pointing.pendingMagSync && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0 && !nearHorizonSingularity) {
         const wHeading = event.webkitCompassHeading;
-        const initHeading = Math.abs(beta) > 135 ? normalizeAngle360(wHeading + 180) : wHeading;
+        const initHeading = isAboveHorizonPosture ? normalizeAngle360(wHeading + 180.0) : wHeading;
         state.pointing.compassOffsetDeg = normalizeAngle360(initHeading - unrolledGyroYaw);
         state.pointing.pendingMagSync = false;
         state.pointing.magCompassSynced = true;
+        // If synced while above horizon, also flag a one-time clean below-horizon refinement in case iOS CLHeading had inverted-screen tilt distortion
+        state.pointing.refineWhenBelowHorizon = isAboveHorizonPosture;
         updateCompassUiStatus();
+      } else if (state.pointing.refineWhenBelowHorizon && !isAboveHorizonPosture && beta >= 20 && beta <= 82 && Math.abs(gamma) <= 20 && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
+        state.pointing.compassOffsetDeg = normalizeAngle360(event.webkitCompassHeading - unrolledGyroYaw);
+        state.pointing.refineWhenBelowHorizon = false;
       } else if (typeof state.pointing.compassOffsetDeg !== "number") {
         state.pointing.compassOffsetDeg = 0;
       }
@@ -3774,6 +3810,22 @@
 
     function closeGpsModal() {
       document.getElementById("gpsModal").classList.add("hidden");
+    }
+
+    function toggleLeftMenu() {
+      const m = document.getElementById("leftMenuModal");
+      if (!m) return;
+      if (m.classList.contains("hidden")) {
+        m.classList.remove("hidden");
+        renderSatelliteList();
+      } else {
+        m.classList.add("hidden");
+      }
+    }
+
+    function closeLeftMenu() {
+      const m = document.getElementById("leftMenuModal");
+      if (m) m.classList.add("hidden");
     }
 
     function requestHardwareGps() {
@@ -3866,6 +3918,7 @@
       state.pointing.el = Math.max(-90, Math.min(90, el));
       updateCompassUiStatus();
       syncGimbalSlidersFromPointing();
+      closeLeftMenu();
     }
 
     function syncGimbalSlidersFromPointing() {
@@ -3953,6 +4006,15 @@
       if (type === "deepspace") state.filters.showDeepSpace = checked;
       if (type === "satellites") state.filters.showSatellites = checked;
       if (type === "starlink") state.filters.showStarlink = checked;
+      if (type === "gimbalbox") {
+        state.filters.showGimbalBox = checked;
+        const gBox = document.getElementById("gimbalInfoBox");
+        if (gBox) {
+          if (checked) gBox.classList.remove("hidden");
+          else gBox.classList.add("hidden");
+        }
+        setTimeout(resizeCanvas, 20);
+      }
       renderSatelliteList();
     }
 
@@ -3967,6 +4029,7 @@
       document.getElementById("btnClearGuide").classList.remove("hidden");
       updateCompassUiStatus();
       renderSatelliteList();
+      closeLeftMenu();
       showToast(`Guide Arrow active for ${sat.name} (#${sat.noradId})`);
     }
 
@@ -5664,7 +5727,7 @@
         navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(function () {});
       }
       if ("caches" in window && (location.protocol === "https:" || location.hostname === "localhost")) {
-        caches.open("orbitalscope-pwa-v13").then(function (cache) {
+        caches.open("orbitalscope-pwa-v14").then(function (cache) {
           const htmlBlob = new Response(document.documentElement.outerHTML, {
             headers: { "Content-Type": "text/html; charset=utf-8" }
           });
@@ -5705,6 +5768,26 @@
         state.pointing.az = initTarget.azDeg;
         state.pointing.el = initTarget.elDeg;
         syncGimbalSlidersFromPointing();
+      }
+      // Start Live Sensor by default (and unlock iOS DeviceOrientationEvent permission on first screen touch if required by WebKit)
+      activateOrientationListeners();
+      if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+        const unlockIosOrientationOnFirstTap = () => {
+          if (!state.pointing.compassActive) return;
+          DeviceOrientationEvent.requestPermission()
+            .then((perm) => {
+              if (perm === "granted") {
+                state.pointing.pendingMagSync = true;
+                window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+                updateCompassUiStatus();
+              }
+            })
+            .catch(() => {});
+          window.removeEventListener("touchend", unlockIosOrientationOnFirstTap, true);
+          window.removeEventListener("click", unlockIosOrientationOnFirstTap, true);
+        };
+        window.addEventListener("touchend", unlockIosOrientationOnFirstTap, true);
+        window.addEventListener("click", unlockIosOrientationOnFirstTap, true);
       }
       updateCompassUiStatus();
       if (animFrameId) cancelAnimationFrame(animFrameId);
