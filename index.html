@@ -327,21 +327,27 @@
 
     <!-- 2. CENTER CURSOR INFORMATION BOX (4 Full-Width Readable Rows on First Screen Without Scrolling) -->
     <div id="cursorInfoBox" class="hud-glass-active shrink-0 rounded-2xl p-2 sm:p-2.5 transition-all overflow-hidden">
-      <div class="flex items-center justify-between gap-1.5 border-b border-cyan-500/20 pb-1">
-        <div class="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+      <div class="flex flex-col gap-1 border-b border-cyan-500/20 pb-1">
+        <!-- Line 1: Dedicated Full-Width Object Name -->
+        <div class="flex items-center gap-2 min-w-0 w-full overflow-hidden">
           <div id="cursorStatusIndicator" class="w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee] shrink-0"></div>
-          <h2 id="infoSatName" class="text-xs sm:text-sm font-bold text-white tracking-tight truncate">ISS (ZARYA)</h2>
-          <span id="infoNoradBadge" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-tech text-[10px] border border-slate-700 shrink-0">NORAD 25544</span>
-          <span id="infoCosparBadge" class="hidden sm:inline-block px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300 font-mono-tech text-[10px] shrink-0">1998-067A</span>
+          <h2 id="infoSatName" class="text-sm sm:text-base font-bold text-white tracking-tight truncate w-full">ISS (ZARYA)</h2>
         </div>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <span id="cursorLockBadge" class="px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
-            IN CURSOR
-          </span>
-          <span id="cursorAngularOffset" class="text-[10px] font-mono-tech text-amber-300 font-semibold">&Delta;&theta;: 0.0&deg;</span>
-          <button id="btnLockCursorTarget" type="button" onclick="toggleLockCurrentCursorTarget()" class="px-2 py-0.5 rounded-lg text-[10px] font-mono-tech font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition">
-            Lock Cursor Target
-          </button>
+        <!-- Line 2: Badges, Angular Offset & Lock/Snap Action -->
+        <div class="flex items-center justify-between gap-1.5 w-full overflow-hidden">
+          <div class="flex items-center gap-1.5 min-w-0 overflow-hidden">
+            <span id="infoNoradBadge" class="px-1.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-tech text-[10px] border border-slate-700 shrink-0">NORAD 25544</span>
+            <span id="infoCosparBadge" class="px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-300 font-mono-tech text-[10px] truncate">1998-067A</span>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span id="cursorLockBadge" class="px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-cyan-500/20 text-cyan-200 border border-cyan-400/40">
+              IN CURSOR
+            </span>
+            <span id="cursorAngularOffset" class="text-[10px] font-mono-tech text-amber-300 font-semibold">&Delta;&theta;: 0.0&deg;</span>
+            <button id="btnLockCursorTarget" type="button" onclick="toggleLockCurrentCursorTarget()" class="px-2 py-0.5 rounded-lg text-[10px] font-mono-tech font-semibold bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40 transition">
+              Lock Cursor Target
+            </button>
+          </div>
         </div>
       </div>
 
