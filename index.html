@@ -2669,7 +2669,11 @@
         userElTrimDeg: 0.0,
         pendingMagSync: true,
         magCompassSynced: false,
-        sensorEventsReceiving: false
+        sensorEventsReceiving: false,
+        autoMagRealignRemaining: 5,
+        autoMagRealignDone: 0,
+        lastMagSyncMs: 0,
+        initialAutoRealignStarted: false
       },
       globeRotation: {
         lon: -80.6490,
@@ -3576,6 +3580,41 @@
       requestAndAttachOrientationStream(true);
     }
 
+    function updateRealignMagButtonLabel(passIndex, totalPasses) {
+      const btn = document.getElementById("btnRealignMag");
+      if (!btn) return;
+      if (typeof passIndex === "number" && typeof totalPasses === "number" && passIndex < totalPasses) {
+        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-cyan-300 shrink-0 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="leading-tight">Realign<br>Mag (${passIndex + 1}/${totalPasses})</span>`;
+      } else {
+        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-cyan-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="leading-tight">Realign<br>Mag</span>`;
+      }
+    }
+
+    function runAutoMagRealign5x(showFeedback = true) {
+      if (Array.isArray(window.__autoMagRealignTimers)) {
+        for (let i = 0; i < window.__autoMagRealignTimers.length; i++) {
+          clearTimeout(window.__autoMagRealignTimers[i]);
+        }
+      }
+      window.__autoMagRealignTimers = [];
+      state.pointing.initialAutoRealignStarted = true;
+      state.pointing.autoMagRealignDone = 0;
+      state.pointing.autoMagRealignRemaining = 5;
+      state.pointing.pendingMagSync = true;
+      updateRealignMagButtonLabel(0, 5);
+
+      const delaysMs = [80, 380, 700, 1050, 1420];
+      for (let pass = 0; pass < delaysMs.length; pass++) {
+        const timerId = setTimeout(() => {
+          realignMagCompass(true, pass + 1, 5);
+          if (pass === delaysMs.length - 1 && showFeedback) {
+            showToast("Live Sky Compass active: 5x automatic Mag Realign completed.");
+          }
+        }, delaysMs[pass]);
+        window.__autoMagRealignTimers.push(timerId);
+      }
+    }
+
     function requestAndAttachOrientationStream(showFeedback = true) {
       state.pointing.compassActive = true;
       state.pointing.autoTrackNorad = null;
@@ -3597,9 +3636,7 @@
               window.removeEventListener("deviceorientation", handleDeviceOrientation, false);
               window.addEventListener("deviceorientation", handleDeviceOrientation, true);
               updateCompassUiStatus();
-              if (showFeedback) {
-                showToast("Live Sensor active! Startup Mag Compass locked to steady Accel/Gyro.");
-              }
+              runAutoMagRealign5x(showFeedback);
             } else if (showFeedback) {
               hideIosSensorOverlay();
               state.pointing.compassActive = false;
@@ -3617,6 +3654,7 @@
         window.addEventListener("deviceorientationabsolute", handleDeviceOrientation, true);
         window.addEventListener("deviceorientation", handleDeviceOrientation, true);
         updateCompassUiStatus();
+        runAutoMagRealign5x(showFeedback);
       }
     }
 
@@ -3761,13 +3799,25 @@
       showToast("Reset sight-alignment trim to 0.0\u00b0.");
     }
 
-    function realignMagCompass() {
+    function realignMagCompass(isAutoBurst = false, passNum = 1, totalPasses = 1) {
       if (!state.pointing.compassActive || !state.pointing.sensorEventsReceiving) {
-        requestAndAttachOrientationStream(true);
+        if (!isAutoBurst) {
+          requestAndAttachOrientationStream(true);
+        } else {
+          state.pointing.pendingMagSync = true;
+        }
         return;
       }
       state.pointing.pendingMagSync = true;
-      showToast("Reading Magnetic Compass once to realign, then locking to steady Accel/Gyro...");
+      if (isAutoBurst) {
+        if (passNum < totalPasses) {
+          updateRealignMagButtonLabel(passNum, totalPasses);
+        } else {
+          updateRealignMagButtonLabel(null, null);
+        }
+      } else {
+        showToast("Reading Magnetic Compass once to realign, then locking to steady Accel/Gyro...");
+      }
     }
 
     function activateOrientationListeners() {
@@ -3775,6 +3825,8 @@
       state.pointing.autoTrackNorad = null;
       state.pointing.pendingMagSync = true;
       state.pointing.magCompassSynced = false;
+      state.pointing.autoMagRealignRemaining = 5;
+      state.pointing.autoMagRealignDone = 0;
       document.getElementById("btnUnlockTrack").classList.add("hidden");
       // Attach immediately on open in case permission is already active in this WebKit session, AND call requestAndAttachOrientationStream
       window.addEventListener("deviceorientation", handleDeviceOrientation, true);
@@ -3799,32 +3851,50 @@
         if (!state.pointing.sensorEventsReceiving) {
           state.pointing.sensorEventsReceiving = true;
           hideIosSensorOverlay();
+          if (!state.pointing.initialAutoRealignStarted) {
+            runAutoMagRealign5x(false);
+          }
         }
       }
       const alpha = typeof event.alpha === "number" && event.alpha !== null ? event.alpha : 0;
       const beta = typeof event.beta === "number" && event.beta !== null ? event.beta : 90;
       const gamma = typeof event.gamma === "number" && event.gamma !== null ? event.gamma : 0;
 
-      // 1. One-shot Magnetic Compass Read at Startup (or when user taps "Realign Mag"):
-      // Why Realign Mag previously failed above the horizon:
-      // At the horizon (beta = 90 deg), cos(beta) flips sign from >0 (below horizon, +Y top edge leans forward)
-      // to <0 (above horizon, +Y top edge leans backward 180 deg opposite the back camera!).
-      // Previously the threshold was |beta| > 135 instead of |beta| > 90, leaving all normal sky elevations (+1 to +45 deg, beta 91..135) inverted by 180 deg!
+      // Ensure all 5 startup magnetic realignment reads execute across distinct sensor samples
+      const nowPerf = performance.now();
+      if (state.pointing.autoMagRealignRemaining > 0 && (nowPerf - (state.pointing.lastMagSyncMs || 0)) >= 220) {
+        state.pointing.pendingMagSync = true;
+      }
+
       const unrolledGyroYaw = normalizeAngle360(360.0 - alpha);
       const isAboveHorizonPosture = Math.abs(beta) > 90;
       const nearHorizonSingularity = Math.abs(Math.abs(beta) - 90) < 4.5;
+      let justSyncedMag = false;
       if (state.pointing.pendingMagSync && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0 && !nearHorizonSingularity) {
         const wHeading = event.webkitCompassHeading;
         const initHeading = isAboveHorizonPosture ? normalizeAngle360(wHeading + 180.0) : wHeading;
         state.pointing.compassOffsetDeg = normalizeAngle360(initHeading - unrolledGyroYaw);
         state.pointing.pendingMagSync = false;
         state.pointing.magCompassSynced = true;
-        // If synced while above horizon, also flag a one-time clean below-horizon refinement in case iOS CLHeading had inverted-screen tilt distortion
+        state.pointing.lastMagSyncMs = nowPerf;
+        justSyncedMag = true;
+        if (state.pointing.autoMagRealignRemaining > 0) {
+          state.pointing.autoMagRealignRemaining--;
+          state.pointing.autoMagRealignDone++;
+          if (state.pointing.autoMagRealignRemaining > 0) {
+            updateRealignMagButtonLabel(state.pointing.autoMagRealignDone, 5);
+          } else {
+            updateRealignMagButtonLabel(null, null);
+          }
+        }
+        // If synced while above horizon, trigger a 5-pass below-horizon refinement when lowered below the horizon
         state.pointing.refineWhenBelowHorizon = isAboveHorizonPosture;
         updateCompassUiStatus();
       } else if (state.pointing.refineWhenBelowHorizon && !isAboveHorizonPosture && beta >= 20 && beta <= 82 && Math.abs(gamma) <= 20 && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
         state.pointing.compassOffsetDeg = normalizeAngle360(event.webkitCompassHeading - unrolledGyroYaw);
         state.pointing.refineWhenBelowHorizon = false;
+        justSyncedMag = true;
+        runAutoMagRealign5x(false);
       } else if (typeof state.pointing.compassOffsetDeg !== "number") {
         state.pointing.compassOffsetDeg = 0;
       }
@@ -3842,8 +3912,8 @@
       const ty = -sA * sG + cA * sB * cG;
       const tz = Math.max(-1, Math.min(1, -cB * cG));
 
-      const prev = state.pointing.camVec || [tx, ty, tz];
-      const blend = 0.30;
+      const prev = justSyncedMag ? [tx, ty, tz] : (state.pointing.camVec || [tx, ty, tz]);
+      const blend = justSyncedMag ? 1.0 : 0.30;
       let nx = prev[0] + (tx - prev[0]) * blend;
       let ny = prev[1] + (ty - prev[1]) * blend;
       let nz = prev[2] + (tz - prev[2]) * blend;
