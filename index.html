@@ -282,6 +282,32 @@
           </span>
           <span class="text-[11px] font-mono-tech text-cyan-200">Unlocks iPhone Motion &amp; Orientation on Open</span>
         </button>
+        <!-- Mag Realign Status & Horizon Guidance Pop-Up Info Box -->
+        <div id="magRealignPopup" class="hidden absolute inset-x-3 top-3 z-20 mx-auto max-w-sm pointer-events-none">
+          <div id="magRealignPopupCard" class="pointer-events-auto rounded-2xl bg-slate-950/92 backdrop-blur-md border-2 border-cyan-400/70 px-3.5 py-2.5 shadow-2xl transition-all duration-150">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <span id="magRealignPopupDot" class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0"></span>
+                <span id="magRealignPopupTitle" class="font-mono-tech text-xs font-bold tracking-wide text-cyan-200 truncate">
+                  MAG REALIGN IN PROGRESS (0 / 5)
+                </span>
+              </div>
+              <button id="btnDismissMagPopup" type="button" onclick="dismissMagRealignPopup()" class="text-slate-400 hover:text-slate-200 text-xs font-mono-tech px-1.5 py-0.5 rounded border border-slate-700/70 bg-slate-900/70" title="Close Mag Realign status box">
+                Close
+              </button>
+            </div>
+            <p id="magRealignPopupMsg" class="mt-1.5 text-[11px] leading-snug text-slate-200">
+              Keep the cursor below the horizon while calibrating magnetic compass (5 passes)...
+            </p>
+            <div class="mt-2 w-full bg-slate-800/90 rounded-full h-2 overflow-hidden border border-slate-700/80">
+              <div id="magRealignPopupBar" class="h-full bg-cyan-400 transition-all duration-150" style="width: 10%;"></div>
+            </div>
+            <div id="magRealignPopupMeta" class="mt-1.5 flex items-center justify-between text-[10px] font-mono-tech text-cyan-300">
+              <span>Pass 0 of 5</span>
+              <span>Cursor EL: --</span>
+            </div>
+          </div>
+        </div>
       </div>
       <!-- Ultra-compact single-line guide status strip at bottom edge of sky display -->
       <div class="px-2.5 py-1 bg-slate-900/95 border-t border-slate-800/90 flex items-center justify-between gap-2 font-mono-tech text-[10px] shrink-0">
@@ -2673,7 +2699,10 @@
         autoMagRealignRemaining: 5,
         autoMagRealignDone: 0,
         lastMagSyncMs: 0,
-        initialAutoRealignStarted: false
+        initialAutoRealignStarted: false,
+        magRealignActive: false,
+        magRealignWaitingBelowHorizon: false,
+        magRealignInterrupted: false
       },
       globeRotation: {
         lon: -80.6490,
@@ -3584,35 +3613,102 @@
       const btn = document.getElementById("btnRealignMag");
       if (!btn) return;
       if (typeof passIndex === "number" && typeof totalPasses === "number" && passIndex < totalPasses) {
-        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-cyan-300 shrink-0 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="leading-tight">Realign<br>Mag (${passIndex + 1}/${totalPasses})</span>`;
+        btn.innerHTML = `<svg class="w-3.5 h-3.5 text-cyan-300 shrink-0 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="leading-tight">Realign<br>Mag (${passIndex}/${totalPasses})</span>`;
       } else {
         btn.innerHTML = `<svg class="w-3.5 h-3.5 text-cyan-300 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span class="leading-tight">Realign<br>Mag</span>`;
       }
     }
 
-    function runAutoMagRealign5x(showFeedback = true) {
-      if (Array.isArray(window.__autoMagRealignTimers)) {
-        for (let i = 0; i < window.__autoMagRealignTimers.length; i++) {
-          clearTimeout(window.__autoMagRealignTimers[i]);
-        }
+    function dismissMagRealignPopup() {
+      state.pointing.magRealignActive = false;
+      state.pointing.pendingMagSync = false;
+      state.pointing.autoMagRealignRemaining = 0;
+      const popup = document.getElementById("magRealignPopup");
+      if (popup) popup.classList.add("hidden");
+      updateRealignMagButtonLabel(null, null);
+    }
+
+    function renderMagRealignPopup(mode, donePasses, totalPasses, currentElDeg, wasRestarted) {
+      const popup = document.getElementById("magRealignPopup");
+      const card = document.getElementById("magRealignPopupCard");
+      const dot = document.getElementById("magRealignPopupDot");
+      const title = document.getElementById("magRealignPopupTitle");
+      const msg = document.getElementById("magRealignPopupMsg");
+      const bar = document.getElementById("magRealignPopupBar");
+      const meta = document.getElementById("magRealignPopupMeta");
+      if (!popup || !card || !title || !msg || !bar || !meta) return;
+
+      popup.classList.remove("hidden");
+      const elStr = typeof currentElDeg === "number" ? `${currentElDeg >= 0 ? "+" : ""}${currentElDeg.toFixed(1)}\u00b0` : "--";
+
+      if (mode === "above_horizon_initial") {
+        card.className = "pointer-events-auto rounded-2xl bg-slate-950/95 backdrop-blur-md border-2 border-amber-400/90 px-3.5 py-2.5 shadow-2xl transition-all duration-150";
+        if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping shrink-0";
+        title.className = "font-mono-tech text-xs font-bold tracking-wide text-amber-300 truncate";
+        title.textContent = "POINT BELOW HORIZON FOR MAG REALIGN";
+        msg.textContent = "Move the cursor below the horizon (EL < 0\u00b0) and keep it there during Mag Realign. Realign will begin automatically once below the horizon.";
+        bar.className = "h-full bg-amber-400 transition-all duration-150";
+        bar.style.width = "0%";
+        meta.className = "mt-1.5 flex items-center justify-between text-[10px] font-mono-tech text-amber-300";
+        meta.innerHTML = `<span>Waiting for Below Horizon (0/${totalPasses})</span><span>Cursor EL: ${elStr} (Above)</span>`;
+      } else if (mode === "above_horizon_interrupted") {
+        card.className = "pointer-events-auto rounded-2xl bg-slate-950/95 backdrop-blur-md border-2 border-rose-400/90 px-3.5 py-2.5 shadow-2xl transition-all duration-150";
+        if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-rose-400 animate-ping shrink-0";
+        title.className = "font-mono-tech text-xs font-bold tracking-wide text-rose-300 truncate";
+        title.textContent = "CURSOR ABOVE HORIZON - MOVE BELOW TO RESTART";
+        msg.textContent = "Cursor lifted above the horizon before Mag Realign finished. Move the cursor back below the horizon (EL < 0\u00b0) and keep it there to restart Mag Realign.";
+        bar.className = "h-full bg-rose-400 transition-all duration-150";
+        bar.style.width = "0%";
+        meta.className = "mt-1.5 flex items-center justify-between text-[10px] font-mono-tech text-rose-300";
+        meta.innerHTML = `<span>Paused - Reset to 0/${totalPasses}</span><span>Cursor EL: ${elStr} (Above)</span>`;
+      } else if (mode === "working") {
+        card.className = "pointer-events-auto rounded-2xl bg-slate-950/92 backdrop-blur-md border-2 border-cyan-400/80 px-3.5 py-2.5 shadow-2xl transition-all duration-150";
+        if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse shrink-0";
+        title.className = "font-mono-tech text-xs font-bold tracking-wide text-cyan-200 truncate";
+        title.textContent = wasRestarted
+          ? `MAG REALIGN RESTARTED (${donePasses} / ${totalPasses})`
+          : `MAG REALIGN WORKING (${donePasses} / ${totalPasses})`;
+        msg.textContent = "Calibrating magnetic heading below the horizon. Keep the cursor below the horizon until all 5 passes complete...";
+        const pct = Math.max(12, Math.min(100, Math.round((donePasses / totalPasses) * 100)));
+        bar.className = "h-full bg-cyan-400 transition-all duration-150";
+        bar.style.width = `${pct}%`;
+        meta.className = "mt-1.5 flex items-center justify-between text-[10px] font-mono-tech text-cyan-300";
+        meta.innerHTML = `<span>Pass ${donePasses} of ${totalPasses}</span><span>Cursor EL: ${elStr} (Below Horizon)</span>`;
+      } else if (mode === "complete") {
+        card.className = "pointer-events-auto rounded-2xl bg-slate-950/92 backdrop-blur-md border-2 border-emerald-400/90 px-3.5 py-2.5 shadow-2xl transition-all duration-150";
+        if (dot) dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0";
+        title.className = "font-mono-tech text-xs font-bold tracking-wide text-emerald-300 truncate";
+        title.textContent = `MAG REALIGN SUCCESSFUL (${totalPasses} / ${totalPasses})`;
+        msg.textContent = "Magnetic compass aligned and locked to 3D gyroscope.";
+        bar.className = "h-full bg-emerald-400 transition-all duration-150";
+        bar.style.width = "100%";
+        meta.className = "mt-1.5 flex items-center justify-between text-[10px] font-mono-tech text-emerald-300";
+        meta.innerHTML = `<span>Completed ${totalPasses}/${totalPasses} Passes</span><span>Cursor EL: ${elStr}</span>`;
       }
-      window.__autoMagRealignTimers = [];
+    }
+
+    function startMagRealignSession() {
+      if (window.__magPopupHideTimer) {
+        clearTimeout(window.__magPopupHideTimer);
+        window.__magPopupHideTimer = null;
+      }
       state.pointing.initialAutoRealignStarted = true;
+      state.pointing.magRealignActive = true;
       state.pointing.autoMagRealignDone = 0;
       state.pointing.autoMagRealignRemaining = 5;
+      state.pointing.magRealignInterrupted = false;
+      state.pointing.lastMagSyncMs = 0;
       state.pointing.pendingMagSync = true;
-      updateRealignMagButtonLabel(0, 5);
 
-      const delaysMs = [80, 380, 700, 1050, 1420];
-      for (let pass = 0; pass < delaysMs.length; pass++) {
-        const timerId = setTimeout(() => {
-          realignMagCompass(true, pass + 1, 5);
-          if (pass === delaysMs.length - 1 && showFeedback) {
-            showToast("Live Sky Compass active: 5x automatic Mag Realign completed.");
-          }
-        }, delaysMs[pass]);
-        window.__autoMagRealignTimers.push(timerId);
-      }
+      const curEl = typeof state.pointing.rawSensorEl === "number" ? state.pointing.rawSensorEl : state.pointing.el;
+      const belowNow = curEl < -0.5;
+      state.pointing.magRealignWaitingBelowHorizon = !belowNow;
+      updateRealignMagButtonLabel(0, 5);
+      renderMagRealignPopup(belowNow ? "working" : "above_horizon_initial", 0, 5, curEl, false);
+    }
+
+    function runAutoMagRealign5x(showFeedback = true) {
+      startMagRealignSession();
     }
 
     function requestAndAttachOrientationStream(showFeedback = true) {
@@ -3799,25 +3895,13 @@
       showToast("Reset sight-alignment trim to 0.0\u00b0.");
     }
 
-    function realignMagCompass(isAutoBurst = false, passNum = 1, totalPasses = 1) {
+    function realignMagCompass() {
       if (!state.pointing.compassActive || !state.pointing.sensorEventsReceiving) {
-        if (!isAutoBurst) {
-          requestAndAttachOrientationStream(true);
-        } else {
-          state.pointing.pendingMagSync = true;
-        }
+        startMagRealignSession();
+        requestAndAttachOrientationStream(true);
         return;
       }
-      state.pointing.pendingMagSync = true;
-      if (isAutoBurst) {
-        if (passNum < totalPasses) {
-          updateRealignMagButtonLabel(passNum, totalPasses);
-        } else {
-          updateRealignMagButtonLabel(null, null);
-        }
-      } else {
-        showToast("Reading Magnetic Compass once to realign, then locking to steady Accel/Gyro...");
-      }
+      startMagRealignSession();
     }
 
     function activateOrientationListeners() {
@@ -3852,7 +3936,7 @@
           state.pointing.sensorEventsReceiving = true;
           hideIosSensorOverlay();
           if (!state.pointing.initialAutoRealignStarted) {
-            runAutoMagRealign5x(false);
+            startMagRealignSession();
           }
         }
       }
@@ -3860,53 +3944,88 @@
       const beta = typeof event.beta === "number" && event.beta !== null ? event.beta : 90;
       const gamma = typeof event.gamma === "number" && event.gamma !== null ? event.gamma : 0;
 
-      // Ensure all 5 startup magnetic realignment reads execute across distinct sensor samples
-      const nowPerf = performance.now();
-      if (state.pointing.autoMagRealignRemaining > 0 && (nowPerf - (state.pointing.lastMagSyncMs || 0)) >= 220) {
-        state.pointing.pendingMagSync = true;
-      }
+      const bRad = beta * DEG2RAD;
+      const gRad = gamma * DEG2RAD;
+      const cB = Math.cos(bRad), sB = Math.sin(bRad);
+      const cG = Math.cos(gRad), sG = Math.sin(gRad);
+      const instTz = Math.max(-1, Math.min(1, -cB * cG));
+      const instElDeg = Math.max(-90, Math.min(90, Math.asin(instTz) * RAD2DEG));
+      const isCursorBelowHorizon = (instElDeg < -0.5) && (Math.abs(beta) < 89.5);
 
       const unrolledGyroYaw = normalizeAngle360(360.0 - alpha);
-      const isAboveHorizonPosture = Math.abs(beta) > 90;
-      const nearHorizonSingularity = Math.abs(Math.abs(beta) - 90) < 4.5;
+      const nowPerf = performance.now();
       let justSyncedMag = false;
-      if (state.pointing.pendingMagSync && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0 && !nearHorizonSingularity) {
-        const wHeading = event.webkitCompassHeading;
-        const initHeading = isAboveHorizonPosture ? normalizeAngle360(wHeading + 180.0) : wHeading;
-        state.pointing.compassOffsetDeg = normalizeAngle360(initHeading - unrolledGyroYaw);
-        state.pointing.pendingMagSync = false;
-        state.pointing.magCompassSynced = true;
-        state.pointing.lastMagSyncMs = nowPerf;
-        justSyncedMag = true;
-        if (state.pointing.autoMagRealignRemaining > 0) {
-          state.pointing.autoMagRealignRemaining--;
-          state.pointing.autoMagRealignDone++;
-          if (state.pointing.autoMagRealignRemaining > 0) {
-            updateRealignMagButtonLabel(state.pointing.autoMagRealignDone, 5);
+
+      if (state.pointing.magRealignActive) {
+        if (!isCursorBelowHorizon) {
+          // Cursor is above (or on) the horizon during Mag Realign
+          if (state.pointing.autoMagRealignDone > 0 || !state.pointing.magRealignWaitingBelowHorizon) {
+            // User lifted cursor above the horizon before Mag Realign completed -> reset & require below-horizon restart
+            if (state.pointing.autoMagRealignDone > 0) {
+              state.pointing.magRealignInterrupted = true;
+            }
+            state.pointing.autoMagRealignDone = 0;
+            state.pointing.autoMagRealignRemaining = 5;
+            state.pointing.magRealignWaitingBelowHorizon = true;
+            updateRealignMagButtonLabel(0, 5);
+          }
+          renderMagRealignPopup(
+            state.pointing.magRealignInterrupted ? "above_horizon_interrupted" : "above_horizon_initial",
+            0,
+            5,
+            instElDeg,
+            state.pointing.magRealignInterrupted
+          );
+        } else {
+          // Cursor is below the horizon: start or continue 5-pass Mag Realign
+          if (state.pointing.magRealignWaitingBelowHorizon) {
+            state.pointing.magRealignWaitingBelowHorizon = false;
+            state.pointing.autoMagRealignDone = 0;
+            state.pointing.autoMagRealignRemaining = 5;
+            state.pointing.lastMagSyncMs = 0;
+            renderMagRealignPopup("working", 0, 5, instElDeg, state.pointing.magRealignInterrupted);
+          }
+
+          const hasWebkitHeading = typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0;
+          const headingSample = hasWebkitHeading ? event.webkitCompassHeading : unrolledGyroYaw;
+
+          if (state.pointing.autoMagRealignRemaining > 0 && (nowPerf - (state.pointing.lastMagSyncMs || 0)) >= 300) {
+            state.pointing.compassOffsetDeg = normalizeAngle360(headingSample - unrolledGyroYaw);
+            state.pointing.magCompassSynced = true;
+            state.pointing.lastMagSyncMs = nowPerf;
+            state.pointing.autoMagRealignDone++;
+            state.pointing.autoMagRealignRemaining--;
+            justSyncedMag = true;
+
+            if (state.pointing.autoMagRealignRemaining > 0) {
+              updateRealignMagButtonLabel(state.pointing.autoMagRealignDone, 5);
+              renderMagRealignPopup("working", state.pointing.autoMagRealignDone, 5, instElDeg, state.pointing.magRealignInterrupted);
+            } else {
+              // All 5 passes completed below the horizon!
+              state.pointing.magRealignActive = false;
+              state.pointing.pendingMagSync = false;
+              updateRealignMagButtonLabel(null, null);
+              renderMagRealignPopup("complete", 5, 5, instElDeg, state.pointing.magRealignInterrupted);
+              if (window.__magPopupHideTimer) clearTimeout(window.__magPopupHideTimer);
+              window.__magPopupHideTimer = setTimeout(() => {
+                const popup = document.getElementById("magRealignPopup");
+                if (popup && !state.pointing.magRealignActive) {
+                  popup.classList.add("hidden");
+                }
+              }, 480);
+            }
+            updateCompassUiStatus();
           } else {
-            updateRealignMagButtonLabel(null, null);
+            renderMagRealignPopup("working", state.pointing.autoMagRealignDone, 5, instElDeg, state.pointing.magRealignInterrupted);
           }
         }
-        // If synced while above horizon, trigger a 5-pass below-horizon refinement when lowered below the horizon
-        state.pointing.refineWhenBelowHorizon = isAboveHorizonPosture;
-        updateCompassUiStatus();
-      } else if (state.pointing.refineWhenBelowHorizon && !isAboveHorizonPosture && beta >= 20 && beta <= 82 && Math.abs(gamma) <= 20 && typeof event.webkitCompassHeading === "number" && !Number.isNaN(event.webkitCompassHeading) && event.webkitCompassHeading >= 0) {
-        state.pointing.compassOffsetDeg = normalizeAngle360(event.webkitCompassHeading - unrolledGyroYaw);
-        state.pointing.refineWhenBelowHorizon = false;
-        justSyncedMag = true;
-        runAutoMagRealign5x(false);
       } else if (typeof state.pointing.compassOffsetDeg !== "number") {
         state.pointing.compassOffsetDeg = 0;
       }
 
       // 2. Compute true W3C Z-yaw angle corrected by compassOffsetDeg, then apply full 3D rotation R = Rz(alphaTrue) * Rx(beta) * Ry(gamma) to [0, 0, -1]^T
       const alphaTrueRad = normalizeAngle360(alpha - (state.pointing.compassOffsetDeg || 0)) * DEG2RAD;
-      const bRad = beta * DEG2RAD;
-      const gRad = gamma * DEG2RAD;
-
       const cA = Math.cos(alphaTrueRad), sA = Math.sin(alphaTrueRad);
-      const cB = Math.cos(bRad),         sB = Math.sin(bRad);
-      const cG = Math.cos(gRad),         sG = Math.sin(gRad);
 
       const tx = -cA * sG - sA * sB * cG;
       const ty = -sA * sG + cA * sB * cG;
