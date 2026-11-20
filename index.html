@@ -327,6 +327,7 @@
 
     <!-- 2. CENTER CURSOR INFORMATION BOX (4 Full-Width Readable Rows on First Screen Without Scrolling) -->
     <div id="cursorInfoBox" class="hud-glass-active shrink-0 rounded-2xl p-2 sm:p-2.5 transition-all overflow-hidden">
+      <div id="cursorInfoContent" class="transition-opacity duration-100">
       <div class="flex flex-col gap-1 border-b border-cyan-500/20 pb-1">
         <!-- Line 1: Dedicated Full-Width Object Name -->
         <div class="flex items-center gap-2 min-w-0 w-full overflow-hidden">
@@ -398,6 +399,7 @@
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -589,14 +591,6 @@
       <div class="bg-slate-900/90 rounded-2xl p-3 border border-slate-800 flex flex-col gap-2">
         <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-300">Show / Hide Sky &amp; HUD Items</h3>
         <div class="grid grid-cols-2 gap-2 font-mono-tech text-[11px]">
-          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
-            <input id="chkShowStars" type="checkbox" checked onchange="toggleDisplayOption('stars', this.checked)" class="rounded text-sky-300 focus:ring-0" />
-            <span class="text-sky-200">Common Stars</span>
-          </label>
-          <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
-            <input id="chkShowAllStars" type="checkbox" onchange="toggleDisplayOption('allstars', this.checked)" class="rounded text-indigo-300 focus:ring-0" />
-            <span class="text-indigo-200">All 1000 Stars</span>
-          </label>
           <label class="flex items-center gap-1.5 cursor-pointer bg-slate-950/70 px-2.5 py-1.5 rounded-xl border border-slate-800">
             <input id="chkShowBlackHoles" type="checkbox" checked onchange="toggleDisplayOption('blackholes', this.checked)" class="rounded text-orange-400 focus:ring-0" />
             <span class="text-orange-300">Top BHs + Sgr A*</span>
@@ -2728,7 +2722,7 @@
         showOrbits: true,
         showSwarm: false,
         showStars: true,
-        showAllStars: false,
+        showAllStars: true,
         showBlackHoles: true,
         showAllBlackHoles: false,
         showPlanets: true,
@@ -4255,14 +4249,9 @@
     function toggleDisplayOption(type, checked) {
       if (type === "orbits") state.filters.showOrbits = checked;
       if (type === "swarm") state.filters.showSwarm = checked;
-      if (type === "stars") state.filters.showStars = checked;
-      if (type === "allstars") {
-        state.filters.showAllStars = checked;
-        if (checked) {
-          state.filters.showStars = true;
-          const chkStars = document.getElementById("chkShowStars");
-          if (chkStars) chkStars.checked = true;
-        }
+      if (type === "stars" || type === "allstars") {
+        state.filters.showStars = true;
+        state.filters.showAllStars = true;
       }
       if (type === "blackholes") state.filters.showBlackHoles = checked;
       if (type === "allblackholes") {
@@ -4405,7 +4394,7 @@
       state.filters.category = cat;
       if (cat === "Stars") {
         state.filters.showStars = true;
-        document.getElementById("chkShowStars").checked = true;
+        state.filters.showAllStars = true;
       } else if (cat === "Black Holes") {
         state.filters.showBlackHoles = true;
         document.getElementById("chkShowBlackHoles").checked = true;
@@ -4481,7 +4470,6 @@
           if (state.filters.category === "ALL") {
             if (sat.category === "Stars") {
               if (!state.filters.showStars) return false;
-              if (!state.filters.showAllStars && !sat.isCommonStar) return false;
             }
             if (sat.category === "Black Holes") {
               if (!state.filters.showBlackHoles) return false;
@@ -4723,7 +4711,9 @@
       const horizonEl = document.getElementById("infoHorizonState");
       const srcLink = document.getElementById("infoSourceLink");
 
+      const infoContent = document.getElementById("cursorInfoContent");
       if (target) {
+        if (infoContent) infoContent.classList.remove("invisible");
         indicator.className = "w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399] shrink-0";
         badge.className = "px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40";
         badge.textContent = state.pointing.autoTrackNorad === target.noradId ? "LOCKED" : "IN CURSOR";
@@ -4752,42 +4742,8 @@
 
         populateObjectTelemetryRows(target);
       } else {
-        // No object inside the center circle: show data for the exact object that the Guide / Nearest Arrow points to!
-        indicator.className = "w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24] shrink-0";
-        badge.className = "px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-semibold bg-amber-500/20 text-amber-200 border border-amber-400/40";
-        badge.textContent = state.guideTargetNorad ? "GUIDE TARGET" : "NEAREST";
-
-        const angDist = arrowObj
-          ? angularDistanceAzEl(state.pointing.az, state.pointing.el, arrowObj.azDeg, arrowObj.elDeg)
-          : 0;
-        offsetEl.textContent = arrowObj ? `${angDist.toFixed(1)}\u00b0 away` : "\u2014";
-        lockBtn.textContent = "Snap to Nearest";
-
-        const elSign = state.pointing.el >= 0 ? "+" : "";
-        if (arrowObj) {
-          document.getElementById("infoSatName").textContent = arrowObj.name;
-          document.getElementById("infoNoradBadge").textContent = `#${arrowObj.noradId}`;
-          document.getElementById("infoCosparBadge").textContent = arrowObj.cosparId;
-          document.getElementById("infoOrbitBadge").textContent = `${arrowObj.orbitClass} \u00b7 ${arrowObj.category}`;
-          const objElSign = arrowObj.elDeg >= 0 ? "+" : "";
-          document.getElementById("infoOperatorLine").innerHTML =
-            `At Az <span class="text-amber-300 font-mono-tech">${arrowObj.azDeg.toFixed(1)}\u00b0</span> / El <span class="text-amber-300 font-mono-tech">${objElSign}${arrowObj.elDeg.toFixed(1)}\u00b0</span> \u00b7 ${arrowObj.operator}`;
-          srcLink.href = arrowObj.sourceUrl;
-          srcLink.classList.remove("hidden");
-        } else {
-          document.getElementById("infoSatName").textContent = `Open Sky (${cardinalFromAzimuth(state.pointing.az)} ${state.pointing.az.toFixed(1)}\u00b0)`;
-          document.getElementById("infoNoradBadge").textContent = `\u00b1${state.pointing.cursorRadiusDeg}\u00b0`;
-          document.getElementById("infoCosparBadge").textContent = "\u2014";
-          document.getElementById("infoOrbitBadge").textContent = "Scanning";
-          document.getElementById("infoOperatorLine").textContent = "Steer cursor over any object to inspect telemetry.";
-          srcLink.classList.add("hidden");
-        }
-
-        document.getElementById("infoLookAngles").textContent = `Cursor Az ${state.pointing.az.toFixed(1)}\u00b0 (${cardinalFromAzimuth(state.pointing.az)}) \u00b7 El ${elSign}${state.pointing.el.toFixed(1)}\u00b0`;
-        horizonEl.className = state.pointing.el >= 0 ? "text-[10px] text-emerald-400 shrink-0" : "text-[10px] text-amber-300 shrink-0";
-        horizonEl.textContent = state.pointing.el >= 0 ? "Above Horizon" : "Below Horizon";
-
-        populateObjectTelemetryRows(arrowObj);
+        // No highlighted object inside the center circle: keep info box cleanly blank while preserving viewport height
+        if (infoContent) infoContent.classList.add("invisible");
       }
 
       const currentNorad = target ? target.noradId : null;
@@ -4963,9 +4919,10 @@
         ctx.fillText("ZENITH +90\u00b0", zen.x, zen.y - 9);
       }
 
-      // Draw Orbit Path for active / cursor satellite
+      // Draw Orbit Path only for highlighted cursor object or explicit search guide target
       if (state.filters.showOrbits) {
-        const orbitTarget = state.cursorTarget || getArrowOrNearestTarget();
+        const explicitGuide = state.guideTargetNorad ? SAT_BY_NORAD.get(state.guideTargetNorad) : null;
+        const orbitTarget = state.cursorTarget || explicitGuide;
         if (orbitTarget) {
           const track = computeOrbitTrack(orbitTarget, state.time.simTimeMs, state.observer, 64);
           ctx.beginPath();
@@ -4989,23 +4946,6 @@
           ctx.stroke();
           ctx.setLineDash([]);
         }
-      }
-
-      // Draw Realistic 1,000-Star Celestial Dome Background for non-default stars when Stars are enabled
-      if (state.filters.showStars && !state.filters.showAllStars && state.filters.category === "ALL") {
-        for (const st of state.livePositions) {
-          if (st.objectType !== "star" || st.isCommonStar) continue;
-          if (state.filters.onlyAboveHorizon && !st.aboveHorizon) continue;
-          const sp = projectSkyAzEl(st.azDeg, st.elDeg, cx, cy, w, h, state.pointing.fov);
-          if (!sp.visible || sp.x < x0 || sp.x > x0 + w || sp.y < y0 || sp.y > y0 + h) continue;
-          ctx.fillStyle = st.color || "#e0f2fe";
-          const magFactor = Math.max(0.25, Math.min(1.0, (5.5 - (st.vmag || 3.5)) / 3.5));
-          ctx.globalAlpha = (st.aboveHorizon ? 0.62 : 0.20) * magFactor;
-          ctx.beginPath();
-          ctx.arc(sp.x, sp.y, 1.0 + magFactor * 1.1, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1.0;
       }
 
       // Draw Constellation Swarm Nodes
@@ -5054,8 +4994,8 @@
         }
         return true;
       }).sort((a, b) => {
-        const aPri = (state.guideTargetNorad === a.noradId ? 8 : 0) + (state.cursorTarget && state.cursorTarget.noradId === a.noradId ? 4 : 0) + (!a.isBulkSatellite ? 2 : 0);
-        const bPri = (state.guideTargetNorad === b.noradId ? 8 : 0) + (state.cursorTarget && state.cursorTarget.noradId === b.noradId ? 4 : 0) + (!b.isBulkSatellite ? 2 : 0);
+        const aPri = (state.guideTargetNorad === a.noradId ? 16 : 0) + (state.cursorTarget && state.cursorTarget.noradId === a.noradId ? 8 : 0) + (a.objectType !== "star" && !a.isBulkSatellite ? 4 : 0) + (a.isCommonStar ? 2 : 0);
+        const bPri = (state.guideTargetNorad === b.noradId ? 16 : 0) + (state.cursorTarget && state.cursorTarget.noradId === b.noradId ? 8 : 0) + (b.objectType !== "star" && !b.isBulkSatellite ? 4 : 0) + (b.isCommonStar ? 2 : 0);
         if (bPri !== aPri) return bPri - aPri;
         return (a.cursorAngleDeg || 180) - (b.cursorAngleDeg || 180);
       });
@@ -5067,15 +5007,17 @@
         const isCursorHit = state.cursorTarget && state.cursorTarget.noradId === sat.noradId;
         const isGuideHit = state.guideTargetNorad === sat.noradId;
 
-        // Glow halo
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, isGuideHit || isCursorHit ? 13 : 7, 0, Math.PI * 2);
-        ctx.fillStyle = isGuideHit
-          ? "rgba(251, 191, 36, 0.32)"
-          : isCursorHit
-          ? "rgba(34, 211, 238, 0.28)"
-          : "rgba(56, 189, 248, 0.12)";
-        ctx.fill();
+        // Glow halo (skip on non-highlighted star dots so all stars remain crisp dots)
+        if (sat.objectType !== "star" || isCursorHit || isGuideHit) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, isGuideHit || isCursorHit ? (sat.objectType === "star" ? 9 : 13) : 7, 0, Math.PI * 2);
+          ctx.fillStyle = isGuideHit
+            ? "rgba(251, 191, 36, 0.32)"
+            : isCursorHit
+            ? "rgba(34, 211, 238, 0.30)"
+            : "rgba(56, 189, 248, 0.12)";
+          ctx.fill();
+        }
 
         if (isGuideHit) {
           ctx.strokeStyle = "#fbbf24";
@@ -5112,24 +5054,24 @@
           ctx.strokeStyle = "#fde047";
           ctx.stroke();
         } else if (sat.objectType === "star") {
-          // 4-Point Celestial Star Sparkle scaled by apparent brightness (vmag)
-          const rOuter = isCursorHit || isGuideHit ? 8.5 : (sat.vmag !== undefined && sat.vmag < 0.5 ? 6.8 : 5.4);
-          const rInner = rOuter * 0.34;
+          // Uniform-size dot for all stars; translucency scaled by apparent brightness (vmag); slightly enlarged when highlighted in cursor
+          const vmagVal = typeof sat.vmag === "number" ? sat.vmag : 3.5;
+          const magNorm = Math.max(0.0, Math.min(1.0, (5.5 - vmagVal) / 5.8));
+          const baseAlpha = 0.16 + 0.84 * Math.pow(magNorm, 0.85);
+          const dotAlpha = (isCursorHit || isGuideHit) ? 1.0 : (sat.aboveHorizon ? baseAlpha : baseAlpha * 0.52);
+          const dotRadius = (isCursorHit || isGuideHit) ? 3.6 : 2.0;
+
           ctx.save();
-          ctx.translate(p.x, p.y);
-          ctx.beginPath();
-          for (let k = 0; k < 8; k++) {
-            const rad = k % 2 === 0 ? rOuter : rInner;
-            const ang = (k * Math.PI) / 4;
-            if (k === 0) ctx.moveTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
-            else ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
-          }
-          ctx.closePath();
+          ctx.globalAlpha = dotAlpha;
           ctx.fillStyle = sat.color || "#e0f2fe";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, dotRadius, 0, Math.PI * 2);
           ctx.fill();
-          ctx.lineWidth = 0.9;
-          ctx.strokeStyle = "#ffffff";
-          ctx.stroke();
+          if (isCursorHit || isGuideHit) {
+            ctx.strokeStyle = isGuideHit ? "#fde68a" : "#ffffff";
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+          }
           ctx.restore();
         } else if (sat.objectType === "planet") {
           // Planetary disc + ring for Saturn / rays for Sun
@@ -5215,7 +5157,8 @@
           ctx.stroke();
         }
 
-        // Cap label collision checks at 42 labels so large Starlink / Active satellite clouds stay legible at 60 FPS
+        // For stars, show text labels only for the highlighted/guided star or bright common stars; cap total labels at 42
+        if (sat.objectType === "star" && !isCursorHit && !isGuideHit && !sat.isCommonStar) continue;
         if (placedBoxes.length >= 42 && !isCursorHit && !isGuideHit) continue;
 
         // Smart non-overlapping label placement (tries Right, Left, Above, Below)
@@ -5286,12 +5229,14 @@
       ctx.arc(cx, cy, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Draw Search / Target Directional Guide Arrow on Sky Map
-      const activeGuideSat = !hasLock ? getArrowOrNearestTarget() : (
-        state.guideTargetNorad && state.guideTargetNorad !== state.cursorTarget.noradId
-          ? getArrowOrNearestTarget()
-          : null
-      );
+      // Draw Directional Guide Arrow ONLY when the user has explicitly selected a Search / Guide Target (never an automatic closest-to arrow)
+      const explicitGuideObj = state.guideTargetNorad
+        ? (state.livePositions.find((s) => s.noradId === state.guideTargetNorad) ||
+           state.swarmPositions.find((s) => s.noradId === state.guideTargetNorad))
+        : null;
+      const activeGuideSat = explicitGuideObj && (!hasLock || explicitGuideObj.noradId !== state.cursorTarget.noradId)
+        ? explicitGuideObj
+        : null;
 
       const guideBanner = document.getElementById("guideStatusBanner");
       if (activeGuideSat) {
@@ -5417,6 +5362,12 @@
           }
         } else if (guideBanner) {
           guideBanner.textContent = `GUIDE LOCKED: ${activeGuideSat.name} is inside the Center Cursor!`;
+        }
+      } else if (guideBanner) {
+        if (state.cursorTarget) {
+          guideBanner.textContent = `HIGHLIGHTED: ${state.cursorTarget.name} (${state.cursorTarget.cursorAngleDeg.toFixed(1)}\u00b0 from center)`;
+        } else {
+          guideBanner.textContent = "All 1,000 Stars & Sky Objects Selectable \u2014 Center circle on any object";
         }
       }
 
@@ -5575,9 +5526,10 @@
         return { visible: true, x: cx + x3, y: cy - y3 };
       }
 
-      // Orbit Track for selected / cursor satellite
+      // Orbit Track for highlighted cursor object or explicit guide target
       if (state.filters.showOrbits) {
-        const orbitTarget = state.cursorTarget || getArrowOrNearestTarget();
+        const explicitGuide3d = state.guideTargetNorad ? SAT_BY_NORAD.get(state.guideTargetNorad) : null;
+        const orbitTarget = state.cursorTarget || explicitGuide3d;
         if (orbitTarget) {
           const track = computeOrbitTrack(orbitTarget, state.time.simTimeMs, state.observer, 72);
           ctx.beginPath();
